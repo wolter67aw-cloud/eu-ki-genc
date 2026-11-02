@@ -1,0 +1,100 @@
+package eu.kigenc.app.ui.settings
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import eu.kigenc.app.update.UpdateInfo
+import eu.kigenc.app.update.UpdateState
+
+/** Dialog für ein verfügbares Update inkl. Download-Fortschritt. */
+@Composable
+fun UpdateDialog(
+    state: UpdateState,
+    onInstall: (UpdateInfo) -> Unit,
+    onGrantPermission: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val info = when (state) {
+        is UpdateState.Available -> state.info
+        is UpdateState.Downloading -> state.info
+        is UpdateState.Installing -> state.info
+        is UpdateState.NeedsPermission -> state.info
+        else -> return
+    }
+    AlertDialog(
+        onDismissRequest = { if (state is UpdateState.Available) onDismiss() },
+        icon = { Icon(Icons.Outlined.SystemUpdate, null) },
+        title = { Text("Neue Version ${info.versionName}") },
+        text = {
+            Column {
+                when (state) {
+                    is UpdateState.Downloading -> {
+                        Text("Update wird heruntergeladen … ${(state.progress * 100).toInt()} %")
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(progress = { state.progress }, modifier = Modifier.fillMaxWidth())
+                    }
+                    is UpdateState.Installing -> {
+                        Text("Installation wird gestartet. Bitte im folgenden Fenster bestätigen.")
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    }
+                    is UpdateState.NeedsPermission -> Text(
+                        "Damit sich EU KI-GenC selbst aktualisieren kann, erlaube bitte einmalig " +
+                            "„Unbekannte Apps installieren“ für diese App. Danach erneut auf „Installieren“ tippen."
+                    )
+                    else -> {
+                        Text("Eine neue Version von EU KI-GenC ist verfügbar.")
+                        if (info.notes.isNotBlank()) {
+                            Spacer(Modifier.height(12.dp))
+                            Text("Neu:", style = MaterialTheme.typography.labelLarge)
+                            Text(
+                                info.notes,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier
+                                    .heightIn(max = 180.dp)
+                                    .verticalScroll(rememberScrollState())
+                            )
+                        }
+                        if (info.sizeBytes > 0) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Größe: %.1f MB".format(info.sizeBytes / 1_048_576.0),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            when (state) {
+                is UpdateState.Available -> Button(onClick = { onInstall(info) }) { Text("Jetzt installieren") }
+                is UpdateState.NeedsPermission -> Button(onClick = onGrantPermission) { Text("Erlauben") }
+                else -> {}
+            }
+        },
+        dismissButton = {
+            when (state) {
+                is UpdateState.Available -> TextButton(onClick = onDismiss) { Text("Später") }
+                is UpdateState.NeedsPermission -> TextButton(onClick = { onInstall(info) }) { Text("Installieren") }
+                else -> {}
+            }
+        }
+    )
+}
