@@ -42,8 +42,9 @@ Keine Tracking- oder Werbe-Bibliotheken, keine Netzwerk-Bibliotheken von Drittan
 ./gradlew assembleRelease
 ```
 
-Für signierte Builds im CI werden diese Repository-Secrets genutzt:
-`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+Signierte Builds: Der Keystore liegt passwortgeschützt unter `signing/release.jks`.
+Das Passwort steht im Repository-Secret `KEYSTORE_PASSWORD` (Settings → Secrets and variables → Actions).
+Ohne dieses Secret entsteht nur ein Test-Build (Artefakt), aber kein Release.
 
 ## Datenschutz
 

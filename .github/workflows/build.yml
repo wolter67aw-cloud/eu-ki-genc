@@ -31,21 +31,25 @@ jobs:
 
       - name: Android SDK einrichten
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Gradle einrichten
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Signatur-Schlüssel einrichten
+      # Der Keystore liegt passwortgeschützt (PKCS12, AES-256) im Repo unter signing/.
+      # Nur das Passwort ist geheim und steht im Repository-Secret KEYSTORE_PASSWORD.
+      - name: Signatur prüfen
+        id: signing
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
-          elif [ -f signing/release.jks ]; then
+          if [ -n "$KEYSTORE_PASSWORD" ] && [ -f signing/release.jks ]; then
             echo "KEYSTORE_FILE=$GITHUB_WORKSPACE/signing/release.jks" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning::Kein Signatur-Schlüssel gefunden – Build wird mit Debug-Schlüssel signiert."
+            echo "::warning::Secret KEYSTORE_PASSWORD fehlt – Test-Build mit Debug-Signatur, es wird KEIN Release veröffentlicht."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: APK bauen
@@ -53,8 +57,8 @@ jobs:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 1.0.${{ github.run_number }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: eukigenc
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
@@ -69,6 +73,7 @@ jobs:
           path: EU-KI-GenC.apk
 
       - name: Release veröffentlichen
+        if: steps.signing.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
