@@ -30,7 +30,7 @@ jobs:
           java-version: '21'
 
       - name: Android SDK einrichten
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: 'platform-tools'
 
