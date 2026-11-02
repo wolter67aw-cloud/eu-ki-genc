@@ -3,8 +3,10 @@ package eu.kigenc.app.ai
 import eu.kigenc.app.data.ModelInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -16,7 +18,7 @@ import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
 
-class MistralException(val code: Int, message: String) : IOException(message)
+class MistralException(val code: Int, message: String, val retryAfterSec: Int? = null) : IOException(message)
 
 /** Eine Nachricht im Format der Mistral-Chat-API. */
 data class ApiMessage(
@@ -46,6 +48,8 @@ class MistralClient {
 
     companion object {
         private const val BASE = "https://api.mistral.ai/v1"
+        private const val MAX_ATTEMPTS = 3
+        const val FALLBACK_MODEL = "mistral-small-latest"
     }
 
     private fun open(path: String, method: String, apiKey: String, readTimeoutMs: Int = 120_000): HttpURLConnection {
@@ -79,11 +83,14 @@ class MistralClient {
             403 -> "Zugriff verweigert (403). Ist das Modell für dein Konto freigeschaltet?"
             404 -> "Nicht gefunden (404). ${detail.ifBlank { "Modell oder Ressource existiert nicht." }}"
             422 -> "Ungültige Anfrage (422). $detail"
-            429 -> "Zu viele Anfragen oder Kontingent erschöpft (429). Bitte kurz warten."
+            429 -> "Mistral-Limit erreicht (429)${if (detail.isNotBlank()) ": $detail" else "."} " +
+                "Im kostenlosen Experiment-Tarif sind nur wenige Anfragen pro Sekunde/Minute erlaubt – " +
+                "kurz warten und erneut senden. Deine Limits siehst du auf admin.mistral.ai unter „Limits“."
             in 500..599 -> "Mistral-Server nicht erreichbar ($code). Bitte später erneut versuchen."
             else -> "Fehler $code. $detail"
         }
-        throw MistralException(code, msg.trim())
+        val retryAfter = getHeaderField("Retry-After")?.trim()?.toDoubleOrNull()?.toInt()
+        throw MistralException(code, msg.trim(), retryAfter)
     }
 
     private fun HttpURLConnection.readJson(): JSONObject {
@@ -91,53 +98,76 @@ class MistralClient {
         return JSONObject(inputStream.bufferedReader().use { it.readText() })
     }
 
-    /** Streamt die Antwort Stück für Stück (Server-Sent Events). */
+    /**
+     * Streamt die Antwort Stück für Stück (Server-Sent Events).
+     * Bei Limit-Fehlern (429) wird automatisch kurz gewartet und erneut versucht;
+     * hilft das nicht, wird auf das sparsamere Modell [FALLBACK_MODEL] ausgewichen.
+     */
     fun streamChat(
         apiKey: String,
         model: String,
         messages: List<ApiMessage>,
         temperature: Double = 0.7,
     ): Flow<String> = flow {
-        val body = JSONObject()
-            .put("model", model)
-            .put("stream", true)
-            .put("temperature", temperature)
-            .put("messages", JSONArray().apply { messages.forEach { put(it.toJson()) } })
+        val candidates = if (model == FALLBACK_MODEL) listOf(model) else listOf(model, FALLBACK_MODEL)
+        var lastError: MistralException? = null
+        for ((index, m) in candidates.withIndex()) {
+            val body = JSONObject()
+                .put("model", m)
+                .put("stream", true)
+                .put("temperature", temperature)
+                .put("messages", JSONArray().apply { messages.forEach { put(it.toJson()) } })
+            for (attempt in 0 until MAX_ATTEMPTS) {
+                val c = open("/chat/completions", "POST", apiKey)
+                try {
+                    c.setRequestProperty("Accept", "text/event-stream")
+                    c.sendJson(body)
+                    c.ensureOk()
+                    if (index > 0) emit("_Hinweis: $model war gerade ausgelastet, Antwort von $m._\n\n")
+                    readStream(c)
+                    return@flow
+                } catch (e: MistralException) {
+                    if (e.code != 429) throw e
+                    lastError = e
+                    if (attempt < MAX_ATTEMPTS - 1) {
+                        val waitSec = (e.retryAfterSec ?: (1 shl (attempt + 1))).coerceIn(1, 10)
+                        delay(waitSec * 1000L)
+                    }
+                } finally {
+                    c.disconnect()
+                }
+            }
+        }
+        throw lastError ?: MistralException(429, "Mistral-Limit erreicht (429).")
+    }.flowOn(Dispatchers.IO)
 
-        val c = open("/chat/completions", "POST", apiKey)
-        try {
-            c.setRequestProperty("Accept", "text/event-stream")
-            c.sendJson(body)
-            c.ensureOk()
-            c.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
-                while (true) {
-                    currentCoroutineContext().ensureActive()
-                    val line = reader.readLine() ?: break
-                    if (!line.startsWith("data:")) continue
-                    val data = line.substring(5).trim()
-                    if (data == "[DONE]") break
-                    if (data.isEmpty()) continue
-                    val json = runCatching { JSONObject(data) }.getOrNull() ?: continue
-                    val choices = json.optJSONArray("choices") ?: continue
-                    if (choices.length() == 0) continue
-                    val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
-                    when (val content = delta.opt("content")) {
-                        is String -> if (content.isNotEmpty()) emit(content)
-                        is JSONArray -> for (i in 0 until content.length()) {
-                            // Reasoning-Modelle liefern Chunks; nur den eigentlichen Text anzeigen.
-                            val chunk = content.optJSONObject(i) ?: continue
-                            if (chunk.optString("type") == "text") {
-                                val t = chunk.optString("text")
-                                if (t.isNotEmpty()) emit(t)
-                            }
+    private suspend fun FlowCollector<String>.readStream(c: HttpURLConnection) {
+        c.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val line = reader.readLine() ?: break
+                if (!line.startsWith("data:")) continue
+                val data = line.substring(5).trim()
+                if (data == "[DONE]") break
+                if (data.isEmpty()) continue
+                val json = runCatching { JSONObject(data) }.getOrNull() ?: continue
+                val choices = json.optJSONArray("choices") ?: continue
+                if (choices.length() == 0) continue
+                val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
+                when (val content = delta.opt("content")) {
+                    is String -> if (content.isNotEmpty()) emit(content)
+                    is JSONArray -> for (i in 0 until content.length()) {
+                        // Reasoning-Modelle liefern Chunks; nur den eigentlichen Text anzeigen.
+                        val chunk = content.optJSONObject(i) ?: continue
+                        if (chunk.optString("type") == "text") {
+                            val t = chunk.optString("text")
+                            if (t.isNotEmpty()) emit(t)
                         }
                     }
                 }
             }
-        } finally {
-            c.disconnect()
         }
-    }.flowOn(Dispatchers.IO)
+    }
 
     /** Fragt die aktuell verfügbaren Chat-Modelle ab – neue Mistral-Modelle erscheinen so automatisch. */
     suspend fun listModels(apiKey: String): List<ModelInfo> = withContext(Dispatchers.IO) {
