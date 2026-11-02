@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.RecordVoiceOver
@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import eu.kigenc.app.ai.friendlyMessage
 import eu.kigenc.app.app
 import eu.kigenc.app.data.AppSettings
+import eu.kigenc.app.ui.components.EuFlag
 import eu.kigenc.app.update.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -281,11 +282,12 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
             item {
                 ListItem(
-                    leadingContent = { Icon(Icons.Outlined.Info, null) },
+                    leadingContent = { EuFlag(Modifier.height(20.dp)) },
                     headlineContent = { Text("EU KI-GenC ${app.updates.currentVersionName}") },
                     supportingContent = {
                         Text(
-                            "Kotlin · Jetpack Compose · Material 3 · Mistral AI\n" +
+                            "Unabhängige App – kein offizielles Angebot der Europäischen Union.\n" +
+                                "Kotlin · Jetpack Compose · Material 3 · Mistral AI\n" +
                                 (if (app.updates.repo.isNotBlank()) "Updates: github.com/${app.updates.repo}" else "")
                         )
                     },

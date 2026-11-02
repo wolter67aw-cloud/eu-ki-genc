@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
@@ -82,6 +83,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -94,6 +96,7 @@ import eu.kigenc.app.app
 import eu.kigenc.app.data.ChatMessage
 import eu.kigenc.app.data.ChatMode
 import eu.kigenc.app.data.Role
+import eu.kigenc.app.ui.components.EuFlag
 import eu.kigenc.app.ui.components.MarkdownText
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
@@ -191,11 +194,15 @@ fun ChatScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            if (isCode) "Code-Assistent" else "EU KI-GenC",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            EuFlag(Modifier.height(14.dp))
+                            Spacer(Modifier.size(8.dp))
+                            Text(
+                                if (isCode) "Code-Assistent" else "EU KI-GenC",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                         val model = settings?.let { if (isCode) it.codeModel else it.chatModel }
                         if (model != null) {
                             Text(
@@ -338,13 +345,14 @@ private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(72.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.AutoAwesome, contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(36.dp)
-                )
-            }
+        Box(contentAlignment = Alignment.Center) {
+            EuFlag(Modifier.height(64.dp))
+            Icon(
+                if (isCode) Icons.Outlined.Code else Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(26.dp)
+            )
         }
         Spacer(Modifier.height(16.dp))
         Text(
