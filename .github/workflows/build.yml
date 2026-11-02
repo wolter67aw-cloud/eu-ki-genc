@@ -35,7 +35,7 @@ jobs:
           packages: 'platform-tools'
 
       - name: Gradle einrichten
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@v6
 
       # Der Keystore liegt passwortgeschützt (PKCS12, AES-256) im Repo unter signing/.
       # Nur das Passwort ist geheim und steht im Repository-Secret KEYSTORE_PASSWORD.
