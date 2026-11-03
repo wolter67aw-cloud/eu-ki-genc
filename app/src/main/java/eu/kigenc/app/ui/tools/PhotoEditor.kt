@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +65,7 @@ import androidx.lifecycle.viewModelScope
 import eu.kigenc.app.KiApp
 import eu.kigenc.app.ai.ApiMessage
 import eu.kigenc.app.ai.ImageGenerator
+import eu.kigenc.app.ai.friendlyMessage
 import eu.kigenc.app.data.ImageUtils
 import eu.kigenc.app.ui.components.shareImage
 import kotlinx.coroutines.Dispatchers
@@ -124,6 +127,7 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
     val source = MutableStateFlow<String?>(null)
     val version = MutableStateFlow(0)
     val aiImage = MutableStateFlow<File?>(null)
+    val aiError = MutableStateFlow<String?>(null)
 
     fun load(uri: Uri) {
         viewModelScope.launch {
@@ -168,21 +172,32 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
     /** KI-Neugestaltung: Foto beschreiben lassen und daraus ein neues Bild im gewünschten Stil erzeugen. */
     fun aiRemix(instruction: String) {
         val path = source.value ?: return
+        aiError.value = null
         launchAi { s ->
-            val dataUrl = ImageUtils.toDataUrl(path) ?: error("Bild nicht lesbar")
-            val description = app.mistral.complete(
-                s.apiKey, s.chatModel,
-                listOf(
-                    ApiMessage(
-                        "user",
-                        "Beschreibe dieses Foto präzise als Bild-Prompt für einen Bildgenerator: Motiv, Personen " +
-                            "(ohne Namen), Komposition, Perspektive, Farben, Licht, Stimmung. Gib nur die Beschreibung aus.",
-                        imageDataUrl = dataUrl
+            try {
+                val dataUrl = ImageUtils.toDataUrl(path) ?: error("Bild nicht lesbar")
+                val description = app.mistral.complete(
+                    s.apiKey, s.chatModel,
+                    listOf(
+                        ApiMessage(
+                            "user",
+                            "Beschreibe dieses Foto präzise als Bild-Prompt für einen Bildgenerator: Motiv, Personen " +
+                                "(ohne Namen), Komposition, Perspektive, Farben, Licht, Stimmung. Höchstens 120 Wörter. " +
+                                "Gib nur die Beschreibung aus.",
+                            imageDataUrl = dataUrl
+                        )
                     )
-                )
-            )
-            val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}"
-            aiImage.value = ImageGenerator.generate(app, s, prompt).firstOrNull()
+                ).take(1500)
+                val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}"
+                val file = ImageGenerator.generate(app, s, prompt).firstOrNull()
+                    ?: error("Mistral hat kein Bild zurückgeschickt. Bitte erneut versuchen.")
+                aiImage.value = file
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                aiError.value = e.friendlyMessage()
+                throw e
+            }
         }
     }
 }
@@ -195,6 +210,17 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     val busy by vm.busy.collectAsStateWithLifecycle()
     val aiImage by vm.aiImage.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val aiError by vm.aiError.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
+    var showAi by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(aiImage) {
+        if (aiImage != null) {
+            showAi = true
+            listState.animateScrollToItem(0)
+        } else {
+            showAi = false
+        }
+    }
 
     var brightness by rememberSaveable { mutableFloatStateOf(0f) }
     var contrast by rememberSaveable { mutableFloatStateOf(1f) }
@@ -210,7 +236,7 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     }
 
     ToolScaffold("Foto-Editor", onBack, modifier, message, vm::clearMessage) { inner ->
-        LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
                 OutlinedButton(
                     onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
@@ -224,17 +250,45 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
             val path = source
             if (path != null) {
                 item {
-                    val bitmap = remember(path, version) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap, "Vorschau",
-                            contentScale = ContentScale.Fit,
-                            colorFilter = ColorFilter.colorMatrix(ColorMatrix(buildColorMatrix(adjust))),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = 380.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                        )
+                    val aiFile = aiImage
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (aiFile != null) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(selected = !showAi, onClick = { showAi = false }, label = { Text("Original") })
+                                FilterChip(selected = showAi, onClick = { showAi = true }, label = { Text("KI-Ergebnis") })
+                            }
+                        }
+                        if (showAi && aiFile != null) {
+                            val aiBitmap = remember(aiFile) { BitmapFactory.decodeFile(aiFile.absolutePath)?.asImageBitmap() }
+                            if (aiBitmap != null) {
+                                Image(
+                                    aiBitmap, "KI-Ergebnis", contentScale = ContentScale.Fit,
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp).clip(RoundedCornerShape(16.dp))
+                                )
+                            } else {
+                                Text("Das KI-Bild konnte nicht angezeigt werden.", color = MaterialTheme.colorScheme.error)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    val ok = ImageUtils.saveToGallery(context, aiFile)
+                                    vm.message.value = if (ok) "In der Galerie gespeichert." else "Speichern fehlgeschlagen."
+                                }) { Text("KI-Bild speichern") }
+                                OutlinedButton(onClick = { context.shareImage(aiFile) }) { Text("Teilen") }
+                            }
+                        } else {
+                            val bitmap = remember(path, version) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap, "Vorschau",
+                                    contentScale = ContentScale.Fit,
+                                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(buildColorMatrix(adjust))),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 380.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
+                            }
+                        }
                     }
                 }
                 item {
@@ -291,26 +345,18 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                     Button(onClick = { vm.aiRemix(instruction) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(if (busy) "KI gestaltet um …" else "Mit KI neu gestalten")
                     }
-                    if (busy) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                    if (busy) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp))
+                        Text(
+                            "Foto wird beschrieben und neu gemalt – das dauert meist 20–40 Sekunden. Das Ergebnis erscheint oben.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                aiImage?.let { file ->
+                aiError?.let { err ->
                     item {
-                        val bmp = remember(file) { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() }
-                        if (bmp != null) {
-                            Column {
-                                Image(
-                                    bmp, "KI-Ergebnis", contentScale = ContentScale.Fit,
-                                    modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                                )
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                                    OutlinedButton(onClick = {
-                                        val ok = ImageUtils.saveToGallery(context, file)
-                                        vm.message.value = if (ok) "In der Galerie gespeichert." else "Speichern fehlgeschlagen."
-                                    }) { Text("Speichern") }
-                                    OutlinedButton(onClick = { context.shareImage(file) }) { Text("Teilen") }
-                                }
-                            }
-                        }
+                        Text("⚠️ $err", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }

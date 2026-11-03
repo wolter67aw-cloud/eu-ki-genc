@@ -21,10 +21,14 @@ object ImageGenerator {
         val images = try {
             app.mistral.generateImages(s.apiKey, agentId(app, s, forceNew = false), prompt)
         } catch (e: MistralException) {
-            if (e.code == 404 || e.code == 422) {
-                app.mistral.generateImages(s.apiKey, agentId(app, s, forceNew = true), prompt)
-            } else {
-                throw e
+            when (e.code) {
+                404, 422 -> app.mistral.generateImages(s.apiKey, agentId(app, s, forceNew = true), prompt)
+                // Kein Bild erhalten (nur Text) → einmal mit eindeutiger Anweisung wiederholen.
+                0 -> app.mistral.generateImages(
+                    s.apiKey, agentId(app, s, forceNew = false),
+                    "Nutze jetzt das Bildgenerierungs-Werkzeug und erzeuge genau ein Bild: $prompt"
+                )
+                else -> throw e
             }
         }
         return withContext(Dispatchers.IO) { images.map { ImageUtils.saveGenerated(app, it.bytes) } }
