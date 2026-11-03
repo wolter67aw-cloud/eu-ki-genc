@@ -20,25 +20,30 @@ import java.net.UnknownHostException
 
 class MistralException(val code: Int, message: String, val retryAfterSec: Int? = null) : IOException(message)
 
-/** Eine Nachricht im Format der Mistral-Chat-API. */
+/** Eine Nachricht im Format der Mistral-Chat-API (Text plus optional ein oder mehrere Bilder). */
 data class ApiMessage(
     val role: String,
     val text: String,
     val imageDataUrl: String? = null,
+    val extraImages: List<String> = emptyList(),
 ) {
     fun toJson(): JSONObject {
         val o = JSONObject().put("role", role)
-        if (imageDataUrl == null) {
+        val images = listOfNotNull(imageDataUrl) + extraImages
+        if (images.isEmpty()) {
             o.put("content", text)
         } else {
             val parts = JSONArray()
             if (text.isNotBlank()) parts.put(JSONObject().put("type", "text").put("text", text))
-            parts.put(JSONObject().put("type", "image_url").put("image_url", imageDataUrl))
+            images.forEach { parts.put(JSONObject().put("type", "image_url").put("image_url", it)) }
             o.put("content", parts)
         }
         return o
     }
 }
+
+/** Ergebnis einer Web-Recherche: Antworttext und verwendete Quellen (Titel, URL). */
+data class SearchResult(val text: String, val sources: List<Pair<String, String>>)
 
 /**
  * Schlanker Client für die Mistral-AI-API (Server in der EU).
@@ -50,6 +55,7 @@ class MistralClient {
         private const val BASE = "https://api.mistral.ai/v1"
         private const val MAX_ATTEMPTS = 3
         const val FALLBACK_MODEL = "mistral-small-latest"
+        const val TRANSCRIBE_MODEL = "voxtral-mini-latest"
     }
 
     private fun open(path: String, method: String, apiKey: String, readTimeoutMs: Int = 120_000): HttpURLConnection {
@@ -166,6 +172,121 @@ class MistralClient {
                     }
                 }
             }
+        }
+    }
+
+    private fun contentText(content: Any?): String = when (content) {
+        is String -> content
+        is JSONArray -> buildString {
+            for (i in 0 until content.length()) {
+                val chunk = content.optJSONObject(i) ?: continue
+                if (chunk.optString("type") == "text") append(chunk.optString("text"))
+            }
+        }
+        else -> ""
+    }
+
+    /** Einfache (nicht gestreamte) Antwort – optional als JSON-Objekt. */
+    suspend fun complete(
+        apiKey: String,
+        model: String,
+        messages: List<ApiMessage>,
+        json: Boolean = false,
+        temperature: Double = 0.3,
+    ): String = withContext(Dispatchers.IO) {
+        val body = JSONObject()
+            .put("model", model)
+            .put("temperature", temperature)
+            .put("messages", JSONArray().apply { messages.forEach { put(it.toJson()) } })
+        if (json) body.put("response_format", JSONObject().put("type", "json_object"))
+        var last: MistralException? = null
+        repeat(MAX_ATTEMPTS) { attempt ->
+            val c = open("/chat/completions", "POST", apiKey)
+            try {
+                c.sendJson(body)
+                val o = c.readJson()
+                val msg = o.getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                return@withContext contentText(msg.opt("content"))
+            } catch (e: MistralException) {
+                if (e.code != 429) throw e
+                last = e
+                if (attempt < MAX_ATTEMPTS - 1) delay(((e.retryAfterSec ?: (2 shl attempt)).coerceIn(1, 10)) * 1000L)
+            } finally {
+                c.disconnect()
+            }
+        }
+        throw last ?: MistralException(429, "Mistral-Limit erreicht (429).")
+    }
+
+    /** Recherche im Internet über das eingebaute Web-Search-Werkzeug von Mistral. */
+    suspend fun webSearch(apiKey: String, model: String, question: String): SearchResult =
+        withContext(Dispatchers.IO) {
+            val prompt = question.trim() + "\n\n(Recherchiere aktuell im Web. Antworte auf Deutsch, gut gegliedert " +
+                "in Markdown, und stütze dich auf die gefundenen Quellen.)"
+            val body = JSONObject()
+                .put("model", model)
+                .put("inputs", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
+                .put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
+                .put("store", false)
+            val c = open("/conversations", "POST", apiKey, readTimeoutMs = 180_000)
+            val response = try {
+                c.sendJson(body)
+                c.readJson()
+            } finally {
+                c.disconnect()
+            }
+            val text = StringBuilder()
+            val sources = LinkedHashMap<String, String>()
+            val outputs = response.optJSONArray("outputs") ?: JSONArray()
+            for (i in 0 until outputs.length()) {
+                val entry = outputs.optJSONObject(i) ?: continue
+                if (entry.optString("type") != "message.output") continue
+                when (val content = entry.opt("content")) {
+                    is String -> text.append(content)
+                    is JSONArray -> for (j in 0 until content.length()) {
+                        val chunk = content.optJSONObject(j) ?: continue
+                        when (chunk.optString("type")) {
+                            "text" -> text.append(chunk.optString("text"))
+                            "tool_reference" -> {
+                                val url = chunk.optString("url")
+                                if (url.startsWith("http")) sources[url] = chunk.optString("title").ifBlank { url }
+                            }
+                        }
+                    }
+                }
+            }
+            SearchResult(text.toString().trim(), sources.map { (url, title) -> title to url })
+        }
+
+    /** Wandelt eine Audiodatei mit Voxtral in Text um. */
+    suspend fun transcribe(
+        apiKey: String,
+        bytes: ByteArray,
+        fileName: String,
+        mime: String,
+        language: String?,
+    ): String = withContext(Dispatchers.IO) {
+        val boundary = "----EuKiGenC" + System.currentTimeMillis()
+        val c = open("/audio/transcriptions", "POST", apiKey, readTimeoutMs = 300_000)
+        try {
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+            c.outputStream.use { out ->
+                fun field(name: String, value: String) {
+                    out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray())
+                }
+                field("model", TRANSCRIBE_MODEL)
+                if (!language.isNullOrBlank()) field("language", language)
+                out.write(
+                    ("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"$fileName\"\r\n" +
+                        "Content-Type: $mime\r\n\r\n").toByteArray()
+                )
+                out.write(bytes)
+                out.write("\r\n--$boundary--\r\n".toByteArray())
+            }
+            c.readJson().optString("text").trim()
+        } finally {
+            c.disconnect()
         }
     }
 

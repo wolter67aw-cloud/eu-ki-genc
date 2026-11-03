@@ -334,6 +334,10 @@ private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) 
         "Erstelle eine REST-API in Python mit FastAPI",
         "Schreibe Unit-Tests für folgende Funktion:",
         "Wandle dieses SQL in eine effiziente Abfrage um:",
+        "Automatisierung: Python-Skript, das jeden Morgen meine E-Mails nach Rechnungen durchsucht",
+        "Erstelle ein Bash-Skript für tägliche Backups meines Ordners",
+        "Google-Sheets-Skript, das Zeilen automatisch nach Datum sortiert",
+        "Excel-Formel: Summe aller Beträge pro Monat",
     ) else listOf(
         "Erkläre mir den AI Act der EU in einfachen Worten",
         "Plane mir ein Wochenende in Wien",

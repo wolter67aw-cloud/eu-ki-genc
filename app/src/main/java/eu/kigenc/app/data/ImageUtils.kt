@@ -61,11 +61,11 @@ object ImageUtils {
     }
 
     /** Speichert ein Bild in der Galerie (Bilder/EU KI-GenC). */
-    fun saveToGallery(context: Context, file: File): Boolean = runCatching {
+    fun saveToGallery(context: Context, file: File, mime: String = "image/png"): Boolean = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.MIME_TYPE, mime)
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/EU KI-GenC")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
@@ -81,4 +81,37 @@ object ImageUtils {
         }
         true
     }.getOrDefault(false)
+
+    /** Speichert ein Video in der Galerie (Filme/EU KI-GenC). */
+    fun saveVideoToGallery(context: Context, file: File): Boolean = runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val values = ContentValues().apply {
+                put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
+                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/EU KI-GenC")
+                put(MediaStore.Video.Media.IS_PENDING, 1)
+            }
+            val resolver = context.contentResolver
+            val uri = resolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+            resolver.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+            values.clear()
+            values.put(MediaStore.Video.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        } else {
+            val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: return false
+            file.copyTo(File(dir, file.name), overwrite = true)
+        }
+        true
+    }.getOrDefault(false)
+
+    /** Verkleinert ein Bitmap und liefert es als JPEG-Data-URL (für Vision-Anfragen). */
+    fun bitmapToDataUrl(bitmap: Bitmap, maxSide: Int = 1024, quality: Int = 80): String {
+        val scale = minOf(1f, maxSide.toFloat() / max(bitmap.width, bitmap.height))
+        val scaled = if (scale < 1f) {
+            Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).roundToInt(), (bitmap.height * scale).roundToInt(), true)
+        } else bitmap
+        val out = java.io.ByteArrayOutputStream()
+        scaled.compress(Bitmap.CompressFormat.JPEG, quality, out)
+        return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }
 }

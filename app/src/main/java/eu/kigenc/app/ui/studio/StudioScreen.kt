@@ -77,9 +77,15 @@ import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareImage
 import eu.kigenc.app.ui.components.shareText
 
+private val LANGUAGES = listOf(
+    "Englische", "Deutsche", "Französische", "Spanische", "Italienische", "Niederländische", "Polnische",
+    "Portugiesische", "Tschechische", "Griechische", "Schwedische", "Dänische", "Kroatische", "Rumänische",
+    "Ungarische", "Türkische", "Ukrainische", "Russische", "Arabische", "Chinesische", "Japanische", "Koreanische", "Hindi"
+)
+
 private val STYLES = listOf(
-    "Fotorealistisch", "Illustration", "Aquarell", "Ölgemälde", "3D-Render",
-    "Anime", "Pixel-Art", "Minimalistisch", "Comic", "Skizze"
+    "Fotorealistisch", "Comic", "Illustration", "Aquarell", "Ölgemälde", "Pop-Art", "Impressionismus",
+    "3D-Render", "Anime", "Pixel-Art", "Minimalistisch", "Skizze", "Vintage-Foto", "Fantasy"
 )
 
 @Composable
@@ -148,6 +154,7 @@ private fun TextStudio(
     val speakingId by tts.speakingId.collectAsStateWithLifecycle()
     val copy = rememberCopyToClipboard()
     var input by rememberSaveable { mutableStateOf("") }
+    var targetLanguage by rememberSaveable { mutableStateOf("Englische") }
 
     LazyColumn(
         contentPadding = PaddingValues(
@@ -185,6 +192,18 @@ private fun TextStudio(
                     .padding(horizontal = 16.dp)
             )
         }
+        if (state.template.id == "translate") {
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(LANGUAGES) { lang ->
+                        FilterChip(selected = targetLanguage == lang, onClick = { targetLanguage = lang }, label = { Text(lang) })
+                    }
+                }
+            }
+        }
         item {
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (state.textBusy) {
@@ -192,7 +211,7 @@ private fun TextStudio(
                     Spacer(Modifier.size(12.dp))
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                 } else {
-                    Button(onClick = { vm.generateText(input) }, enabled = input.isNotBlank()) {
+                    Button(onClick = { vm.generateText(input, targetLanguage) }, enabled = input.isNotBlank()) {
                         Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp))
                         Spacer(Modifier.size(8.dp))
                         Text("Generieren")

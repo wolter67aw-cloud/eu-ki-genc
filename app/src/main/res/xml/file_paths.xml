@@ -2,5 +2,7 @@
 <paths>
     <cache-path name="camera" path="camera/" />
     <cache-path name="share" path="share/" />
+    <cache-path name="audio" path="audio/" />
     <files-path name="generated" path="generated/" />
+    <files-path name="videos" path="videos/" />
 </paths>

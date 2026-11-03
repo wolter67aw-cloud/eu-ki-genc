@@ -32,11 +32,13 @@ fun Context.shareText(text: String) {
     startActivity(Intent.createChooser(intent, "Teilen").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
-fun Context.shareImage(file: File) {
+fun Context.shareImage(file: File, mime: String = "image/png") = shareFile(file, mime, "Bild teilen")
+
+fun Context.shareFile(file: File, mime: String, title: String = "Teilen") {
     val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
     val intent = Intent(Intent.ACTION_SEND)
-        .setType("image/png")
+        .setType(mime)
         .putExtra(Intent.EXTRA_STREAM, uri)
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    startActivity(Intent.createChooser(intent, "Bild teilen").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    startActivity(Intent.createChooser(intent, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }

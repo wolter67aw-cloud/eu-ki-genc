@@ -8,6 +8,10 @@ import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Spellcheck
 import androidx.compose.material.icons.outlined.Summarize
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.School
+import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.lifecycle.ViewModel
@@ -57,8 +61,36 @@ val TEXT_TEMPLATES = listOf(
             "dann die wichtigsten Punkte als Liste."
     ),
     TextTemplate(
+        "report", "Bericht", Icons.Outlined.Description,
+        "Worüber soll der Bericht sein? Stichpunkte, Zahlen, Zielgruppe …",
+        "Du erstellst professionelle, sachliche Berichte auf Deutsch: Titel, kurze Zusammenfassung (Management Summary), " +
+            "gegliederte Abschnitte mit Überschriften, ggf. Tabellen, Fazit und nächste Schritte. Erfinde keine Fakten – " +
+            "markiere fehlende Angaben als [bitte ergänzen]."
+    ),
+    TextTemplate(
+        "analyze", "Analysieren", Icons.Outlined.Psychology,
+        "Füge einen Text ein – ich analysiere Tonfall, Struktur und Logik.",
+        "Analysiere den Text des Nutzers sorgfältig auf Deutsch und gliedere die Antwort in: 1) Tonfall & Wirkung " +
+            "(z. B. freundlich, sachlich, aggressiv; Zielgruppe), 2) Struktur & Aufbau, 3) Logik & Argumentation " +
+            "(Schlüssigkeit, Lücken, Widersprüche, Fehlschlüsse), 4) Stärken, 5) konkrete Verbesserungsvorschläge."
+    ),
+    TextTemplate(
+        "explain", "Erklären", Icons.Outlined.School,
+        "Welches Thema soll ich erklären? Optional: für welches Alter/Niveau?",
+        "Du bist ein geduldiger, motivierender Lehrer. Erkläre das Thema verständlich auf Deutsch: zuerst in einem Satz, " +
+            "dann Schritt für Schritt mit Alltagsbeispielen und Analogien, wichtige Begriffe fett, am Ende eine kurze " +
+            "Zusammenfassung und drei Verständnisfragen."
+    ),
+    TextTemplate(
+        "exercises", "Übungen", Icons.Outlined.Quiz,
+        "Zu welchem Thema/Fach sollen Übungen erstellt werden? Niveau?",
+        "Erstelle abwechslungsreiche Übungsaufgaben auf Deutsch (z. B. Multiple Choice, Lückentext, offene Fragen, " +
+            "Rechenaufgaben) mit steigendem Schwierigkeitsgrad. Nummeriere sie. Gib die Lösungen mit kurzer Erklärung " +
+            "erst ganz am Ende unter der Überschrift „Lösungen“ aus."
+    ),
+    TextTemplate(
         "translate", "Übersetzen", Icons.Outlined.Translate,
-        "Text eingeben – optional Zielsprache angeben (z. B. „ins Französische: …“).",
+        "Text eingeben und unten die Zielsprache wählen.",
         "Du bist ein professioneller Übersetzer. Ist eine Zielsprache genannt, übersetze dorthin. Sonst: deutschen " +
             "Text ins Englische, alle anderen Sprachen ins Deutsche. Gib nur die Übersetzung aus."
     ),
@@ -128,7 +160,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
         return s
     }
 
-    fun generateText(input: String) {
+    fun generateText(input: String, targetLanguage: String? = null) {
         if (input.isBlank() || _state.value.textBusy) return
         textJob = viewModelScope.launch {
             val s = requireSettings() ?: return@launch
@@ -139,8 +171,15 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                 app.mistral.streamChat(
                     apiKey = s.apiKey,
                     model = s.chatModel,
-                    messages = listOf(ApiMessage("system", template.system), ApiMessage("user", input.trim())),
-                    temperature = if (template.id == "translate" || template.id == "improve") 0.2 else 0.8,
+                    messages = listOf(
+                        ApiMessage("system", template.system),
+                        ApiMessage(
+                            "user",
+                            if (template.id == "translate" && targetLanguage != null) "Übersetze ins $targetLanguage:\n\n${input.trim()}"
+                            else input.trim()
+                        )
+                    ),
+                    temperature = if (template.id in setOf("translate", "improve", "analyze", "report")) 0.2 else 0.8,
                 ).collect { delta ->
                     out.append(delta)
                     _state.update { it.copy(textOutput = out.toString()) }

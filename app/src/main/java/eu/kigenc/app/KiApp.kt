@@ -34,13 +34,17 @@ class KiApp : Application() {
             getString(R.string.channel_updates),
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply { description = getString(R.string.channel_updates_desc) }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val reminders = NotificationChannel(
+            CHANNEL_REMINDERS, "Erinnerungen", NotificationManager.IMPORTANCE_HIGH
+        ).apply { description = "Erinnerungen an Aufgaben und Termine." }
+        getSystemService(NotificationManager::class.java).createNotificationChannels(listOf(channel, reminders))
 
         UpdateWorker.schedule(this)
     }
 
     companion object {
         const val CHANNEL_UPDATES = "updates"
+        const val CHANNEL_REMINDERS = "reminders"
     }
 }
 

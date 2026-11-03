@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Code
@@ -50,14 +52,16 @@ import eu.kigenc.app.ui.settings.SettingsScreen
 import eu.kigenc.app.ui.settings.UpdateDialog
 import eu.kigenc.app.ui.studio.StudioScreen
 import eu.kigenc.app.ui.studio.StudioViewModel
+import eu.kigenc.app.ui.tools.ToolsScreen
 import eu.kigenc.app.update.UpdateState
 import kotlinx.coroutines.launch
 
 enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     CHAT("Chat", Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble),
     STUDIO("Studio", Icons.Outlined.AutoAwesome, Icons.Filled.AutoAwesome),
+    TOOLS("Werkzeuge", Icons.Outlined.Apps, Icons.Filled.Apps),
     CODE("Code", Icons.Outlined.Code, Icons.Filled.Code),
-    SETTINGS("Einstellungen", Icons.Outlined.Settings, Icons.Filled.Settings),
+    SETTINGS("Optionen", Icons.Outlined.Settings, Icons.Filled.Settings),
 }
 
 @Composable
@@ -132,6 +136,7 @@ fun MainScreen(
             when (tab) {
                 Tab.CHAT -> ChatScreen(chatVm, screenModifier, shared, onSharedConsumed)
                 Tab.STUDIO -> StudioScreen(studioVm, screenModifier)
+                Tab.TOOLS -> ToolsScreen(screenModifier)
                 Tab.CODE -> ChatScreen(codeVm, screenModifier)
                 Tab.SETTINGS -> SettingsScreen(screenModifier)
             }
