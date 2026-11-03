@@ -85,6 +85,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -92,6 +93,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import eu.kigenc.app.R
 import eu.kigenc.app.app
 import eu.kigenc.app.data.ChatMessage
 import eu.kigenc.app.data.ChatMode
@@ -345,15 +347,11 @@ private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) 
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            EuFlag(Modifier.height(64.dp))
-            Icon(
-                if (isCode) Icons.Outlined.Code else Icons.Outlined.AutoAwesome,
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-            )
-        }
+        Image(
+            painter = painterResource(R.drawable.logo_kigenc),
+            contentDescription = "KI-GenC Logo",
+            modifier = Modifier.size(112.dp)
+        )
         Spacer(Modifier.height(16.dp))
         Text(
             if (isCode) "Was sollen wir programmieren?" else "Wie kann ich helfen?",
