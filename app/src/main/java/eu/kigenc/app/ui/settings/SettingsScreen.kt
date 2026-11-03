@@ -200,7 +200,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             item { SectionTitle("Darstellung & Sprache") }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {
-                    SwitchRow(Icons.Outlined.Palette, "Material-You-Farben", "Farben an dein Hintergrundbild anpassen", settings.dynamicColor) {
+                    SwitchRow(Icons.Outlined.Palette, "Material-You-Farben", "Statt der Logo-Farben die Farben deines Hintergrundbilds nutzen", settings.dynamicColor) {
                         scope.launch { app.settings.setDynamicColor(it) }
                     }
                 }

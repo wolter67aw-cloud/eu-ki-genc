@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.KiGenC" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Dunkles Fenster in der Logo-Farbe, damit beim Start nichts weiß aufblitzt. -->
+    <style name="Theme.KiGenC" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
-    <color name="window_bg">#FFFBFCFF</color>
+    <color name="window_bg">#FF00081B</color>
     <color name="eu_blue">#FF003399</color>
 </resources>
