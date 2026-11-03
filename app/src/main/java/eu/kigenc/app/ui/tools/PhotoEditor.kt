@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -170,12 +172,26 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
     }
 
     /** KI-Neugestaltung: Foto beschreiben lassen und daraus ein neues Bild im gewünschten Stil erzeugen. */
+    /** Schritt-für-Schritt-Status der KI-Neugestaltung (sichtbar unter dem Button). */
+    val aiStatus = MutableStateFlow<String?>(null)
+    private var remixJob: kotlinx.coroutines.Job? = null
+
     fun aiRemix(instruction: String) {
-        val path = source.value ?: return
+        val path = source.value
+        if (path == null) {
+            aiError.value = "Bitte zuerst ein Foto auswählen."
+            return
+        }
+        if (remixJob?.isActive == true) return
         aiError.value = null
-        launchAi { s ->
+        aiStatus.value = "Starte …"
+        remixJob = viewModelScope.launch {
+            busy.value = true
             try {
-                val dataUrl = ImageUtils.toDataUrl(path) ?: error("Bild nicht lesbar")
+                val s = app.settings.current()
+                if (!s.hasKey) error("Bitte zuerst deinen Mistral-API-Schlüssel unter „Optionen“ eintragen.")
+                aiStatus.value = "Schritt 1/2: Die KI sieht sich dein Foto an …"
+                val dataUrl = withContext(Dispatchers.IO) { ImageUtils.toDataUrl(path) } ?: error("Foto nicht lesbar.")
                 val description = app.mistral.complete(
                     s.apiKey, s.chatModel,
                     listOf(
@@ -188,15 +204,21 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                         )
                     )
                 ).take(1500)
+                if (description.isBlank()) error("Die KI konnte das Foto nicht beschreiben.")
+                aiStatus.value = "Schritt 2/2: Das neue Bild wird gemalt … (ca. 10–30 Sekunden)"
                 val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}"
                 val file = ImageGenerator.generate(app, s, prompt).firstOrNull()
                     ?: error("Mistral hat kein Bild zurückgeschickt. Bitte erneut versuchen.")
                 aiImage.value = file
+                aiStatus.value = "Fertig ✓ – das neue Bild siehst du direkt hier darunter und oben."
             } catch (e: kotlinx.coroutines.CancellationException) {
+                aiStatus.value = null
                 throw e
             } catch (e: Exception) {
+                aiStatus.value = null
                 aiError.value = e.friendlyMessage()
-                throw e
+            } finally {
+                busy.value = false
             }
         }
     }
@@ -211,12 +233,12 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     val aiImage by vm.aiImage.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val aiError by vm.aiError.collectAsStateWithLifecycle()
+    val aiStatus by vm.aiStatus.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var showAi by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(aiImage) {
         if (aiImage != null) {
             showAi = true
-            listState.animateScrollToItem(0)
         } else {
             showAi = false
         }
@@ -354,9 +376,31 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                         )
                     }
                 }
+                aiStatus?.let { st ->
+                    item {
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                            Text(st, modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        }
+                    }
+                }
                 aiError?.let { err ->
                     item {
-                        Text("⚠️ $err", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                            Text("⚠️ $err", modifier = Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
+                }
+                aiImage?.let { file ->
+                    item {
+                        val bmp = remember(file) { BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap() }
+                        if (bmp != null) {
+                            Image(
+                                bmp, "KI-Ergebnis", contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            )
+                        } else {
+                            Text("Bilddatei konnte nicht geöffnet werden (${file.length() / 1024} KB).", color = MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }

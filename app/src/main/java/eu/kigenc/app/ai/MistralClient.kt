@@ -346,7 +346,6 @@ class MistralClient {
             val body = JSONObject()
                 .put("agent_id", agentId)
                 .put("inputs", prompt)
-                .put("store", false)
             val c = open("/conversations", "POST", apiKey, readTimeoutMs = 180_000)
             val response = try {
                 c.sendJson(body)
