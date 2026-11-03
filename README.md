@@ -1,4 +1,4 @@
-# EU KI-GenC
+# KI-GenC
 
 Europäische KI-App für Android – mit **Mistral AI** (Paris, Server in der EU, DSGVO).
 Die App aktualisiert sich selbst über GitHub Releases.
@@ -13,7 +13,7 @@ Die App aktualisiert sich selbst über GitHub Releases.
 | **Studio – Texte** | Vorlagen für E-Mail, Zusammenfassen, Übersetzen, Verbessern, Social Media, Ideen, Bild-Prompts |
 | **Studio – Bilder** | Bilder erzeugen (FLUX über Mistral), Stile wählen, in Galerie speichern, teilen |
 | **Code** | Code-Assistent mit Codestral: Code schreiben, erklären, Fehler finden, Tests erstellen |
-| **Teilen-Menü** | Text oder Bilder aus anderen Apps direkt an EU KI-GenC schicken |
+| **Teilen-Menü** | Text oder Bilder aus anderen Apps direkt an KI-GenC schicken |
 
 ## Erste Schritte
 

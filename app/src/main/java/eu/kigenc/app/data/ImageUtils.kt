@@ -60,13 +60,13 @@ object ImageUtils {
         return file
     }
 
-    /** Speichert ein Bild in der Galerie (Bilder/EU KI-GenC). */
+    /** Speichert ein Bild in der Galerie (Bilder/KI-GenC). */
     fun saveToGallery(context: Context, file: File, mime: String = "image/png"): Boolean = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
                 put(MediaStore.Images.Media.MIME_TYPE, mime)
-                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/EU KI-GenC")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/KI-GenC")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
             val resolver = context.contentResolver
@@ -82,13 +82,13 @@ object ImageUtils {
         true
     }.getOrDefault(false)
 
-    /** Speichert ein Video in der Galerie (Filme/EU KI-GenC). */
+    /** Speichert ein Video in der Galerie (Filme/KI-GenC). */
     fun saveVideoToGallery(context: Context, file: File): Boolean = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, file.name)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/EU KI-GenC")
+                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/KI-GenC")
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
             val resolver = context.contentResolver

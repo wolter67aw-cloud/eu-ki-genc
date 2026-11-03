@@ -498,7 +498,7 @@ class SlideshowViewModel(app: KiApp) : AiToolViewModel(app) {
         val file = result.value ?: return
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) { ImageUtils.saveVideoToGallery(app, file) }
-            message.value = if (ok) "In der Galerie gespeichert (Filme/EU KI-GenC)." else "Speichern fehlgeschlagen."
+            message.value = if (ok) "In der Galerie gespeichert (Filme/KI-GenC)." else "Speichern fehlgeschlagen."
         }
     }
 }

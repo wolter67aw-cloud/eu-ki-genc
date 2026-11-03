@@ -180,12 +180,12 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMAN))
         val system = when (mode) {
             ChatMode.CHAT ->
-                "Du bist EU KI-GenC, ein freundlicher, kompetenter KI-Assistent aus Europa. " +
+                "Du bist KI-GenC, ein freundlicher, kompetenter KI-Assistent aus Europa. " +
                     "Antworte standardmäßig auf Deutsch, außer der Nutzer schreibt in einer anderen Sprache. " +
                     "Sei präzise und hilfreich, nutze Markdown (Überschriften, Listen, Codeblöcke) wo es die Lesbarkeit verbessert. " +
                     "Wenn du etwas nicht weißt, sag es ehrlich. Heute ist $today."
             ChatMode.CODE ->
-                "Du bist EU KI-GenC Code, ein erfahrener Softwareentwickler. Schreibe sauberen, modernen, " +
+                "Du bist KI-GenC Code, ein erfahrener Softwareentwickler. Schreibe sauberen, modernen, " +
                     "gut kommentierten Code und gib ihn immer in Markdown-Codeblöcken mit Sprachangabe aus. " +
                     "Erkläre kurz auf Deutsch, was der Code tut, und weise auf Sicherheits- oder Performance-Fallen hin. " +
                     "Heute ist $today."

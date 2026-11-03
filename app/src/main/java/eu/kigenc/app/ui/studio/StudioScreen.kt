@@ -3,6 +3,23 @@
 package eu.kigenc.app.ui.studio
 
 import android.graphics.BitmapFactory
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.VideoLibrary
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.InputChip
+import androidx.compose.ui.text.style.TextOverflow
+import eu.kigenc.app.data.Attachment
+import eu.kigenc.app.data.AttachmentKind
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -192,6 +209,12 @@ private fun TextStudio(
                     .padding(horizontal = 16.dp)
             )
         }
+        item {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                AttachmentPickers(busy = state.attachBusy, onPicked = { kind, uri -> vm.addAttachment(kind, uri) })
+                AttachmentChips(state.attachments, onRemove = vm::removeAttachment)
+            }
+        }
         if (state.template.id == "translate") {
             item {
                 LazyRow(
@@ -211,7 +234,10 @@ private fun TextStudio(
                     Spacer(Modifier.size(12.dp))
                     CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
                 } else {
-                    Button(onClick = { vm.generateText(input, targetLanguage) }, enabled = input.isNotBlank()) {
+                    Button(
+                        onClick = { vm.generateText(input, targetLanguage) },
+                        enabled = input.isNotBlank() || state.attachments.isNotEmpty()
+                    ) {
                         Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(18.dp))
                         Spacer(Modifier.size(8.dp))
                         Text("Generieren")
@@ -295,6 +321,22 @@ private fun ImageStudio(
             )
         }
         item {
+            AttachmentPickers(
+                busy = state.attachBusy,
+                kinds = listOf(AttachmentKind.PHOTO, AttachmentKind.VIDEO),
+                labelPrefix = "Vorlage: ",
+                onPicked = { kind, uri -> vm.addAttachment(kind, uri, forImage = true) }
+            )
+            state.imageReference?.let { ref ->
+                AttachmentChips(listOf(ref), onRemove = { vm.removeImageReference() })
+                Text(
+                    "Die KI beschreibt die Vorlage und erzeugt daraus ein neues Bild nach deinem Wunsch.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(STYLES) { s ->
                     FilterChip(
@@ -310,9 +352,9 @@ private fun ImageStudio(
                 Button(
                     onClick = {
                         val full = if (style != null) "$prompt\nStil: $style" else prompt
-                        vm.generateImage(full)
+                        vm.generateImage(full.ifBlank { "Neue Variante dieser Vorlage" })
                     },
-                    enabled = prompt.isNotBlank() && !state.imageBusy,
+                    enabled = (prompt.isNotBlank() || state.imageReference != null) && !state.imageBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.Palette, null, Modifier.size(18.dp))
@@ -396,6 +438,94 @@ private fun ImageStudio(
                     )
                 }
             }
+        }
+    }
+}
+
+
+/** Buttons zum Hinzufügen von Foto, Video oder Datei. */
+@Composable
+private fun AttachmentPickers(
+    busy: Boolean,
+    onPicked: (AttachmentKind, Uri) -> Unit,
+    kinds: List<AttachmentKind> = AttachmentKind.entries,
+    labelPrefix: String = "",
+) {
+    val photo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { onPicked(AttachmentKind.PHOTO, it) }
+    }
+    val video = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let { onPicked(AttachmentKind.VIDEO, it) }
+    }
+    val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { onPicked(AttachmentKind.FILE, it) }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        kinds.forEach { kind ->
+            AssistChip(
+                onClick = {
+                    when (kind) {
+                        AttachmentKind.PHOTO -> photo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        AttachmentKind.VIDEO -> video.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                        AttachmentKind.FILE -> file.launch(
+                            arrayOf(
+                                "application/pdf", "text/*", "application/json",
+                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                "image/*", "video/*", "*/*"
+                            )
+                        )
+                    }
+                },
+                enabled = !busy,
+                label = { Text(labelPrefix + kind.label) },
+                leadingIcon = {
+                    Icon(
+                        when (kind) {
+                            AttachmentKind.PHOTO -> Icons.Outlined.AddPhotoAlternate
+                            AttachmentKind.VIDEO -> Icons.Outlined.VideoLibrary
+                            AttachmentKind.FILE -> Icons.Outlined.AttachFile
+                        },
+                        null, Modifier.size(18.dp)
+                    )
+                }
+            )
+        }
+        if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+    }
+}
+
+/** Zeigt hinzugefügte Anhänge als Chips mit Vorschaubild und Entfernen-Symbol. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AttachmentChips(list: List<Attachment>, onRemove: (String) -> Unit) {
+    if (list.isEmpty()) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        list.forEach { a ->
+            InputChip(
+                selected = false,
+                onClick = { onRemove(a.id) },
+                label = {
+                    Column {
+                        Text(a.name, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 180.dp))
+                        if (a.note.isNotBlank()) {
+                            Text(a.note, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.widthIn(max = 180.dp))
+                        }
+                    }
+                },
+                avatar = {
+                    val thumb = a.thumbnail
+                    if (thumb != null) {
+                        Image(
+                            thumb.asImageBitmap(), null, contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(28.dp).clip(RoundedCornerShape(6.dp))
+                        )
+                    } else {
+                        Icon(Icons.Outlined.Description, null, Modifier.size(20.dp))
+                    }
+                },
+                trailingIcon = { Icon(Icons.Filled.Close, "Entfernen", Modifier.size(18.dp)) },
+            )
         }
     }
 }

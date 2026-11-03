@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">EU KI-GenC</string>
+    <string name="app_name">KI-GenC</string>
     <string name="channel_updates">App-Updates</string>
-    <string name="channel_updates_desc">Benachrichtigt, wenn eine neue Version von EU KI-GenC bereitsteht.</string>
+    <string name="channel_updates_desc">Benachrichtigt, wenn eine neue Version von KI-GenC bereitsteht.</string>
 </resources>

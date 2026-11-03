@@ -321,8 +321,8 @@ class MistralClient {
     suspend fun createImageAgent(apiKey: String, model: String): String = withContext(Dispatchers.IO) {
         val body = JSONObject()
             .put("model", model)
-            .put("name", "EU KI-GenC Bildgenerator")
-            .put("description", "Erzeugt Bilder für die App EU KI-GenC.")
+            .put("name", "KI-GenC Bildgenerator")
+            .put("description", "Erzeugt Bilder für die App KI-GenC.")
             .put(
                 "instructions",
                 "Du bist ein Bildgenerator. Nutze für jede Anfrage das Werkzeug zur Bildgenerierung " +

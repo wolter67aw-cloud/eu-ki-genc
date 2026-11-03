@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.ui.graphics.vector.ImageVector
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import eu.kigenc.app.KiApp
@@ -21,6 +22,9 @@ import eu.kigenc.app.ai.ApiMessage
 import eu.kigenc.app.ai.MistralException
 import eu.kigenc.app.ai.friendlyMessage
 import eu.kigenc.app.data.AppSettings
+import eu.kigenc.app.data.Attachment
+import eu.kigenc.app.data.AttachmentKind
+import eu.kigenc.app.data.Attachments
 import eu.kigenc.app.data.ImageUtils
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -129,6 +133,9 @@ data class StudioUiState(
     val imageBusy: Boolean = false,
     val images: List<GeneratedImageItem> = emptyList(),
     val error: String? = null,
+    val attachments: List<Attachment> = emptyList(),
+    val attachBusy: Boolean = false,
+    val imageReference: Attachment? = null,
 )
 
 class StudioViewModel(private val app: KiApp) : ViewModel() {
@@ -160,8 +167,35 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
         return s
     }
 
+    /** Fügt einen Anhang (Foto, Video oder Datei) hinzu. Für [forImage] = true als Bildvorlage. */
+    fun addAttachment(kind: AttachmentKind, uri: Uri, forImage: Boolean = false) {
+        viewModelScope.launch {
+            _state.update { it.copy(attachBusy = true) }
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    when (kind) {
+                        AttachmentKind.PHOTO -> Attachments.photo(app, uri)
+                        AttachmentKind.VIDEO -> Attachments.video(app, uri)
+                        AttachmentKind.FILE -> Attachments.file(app, uri)
+                    }
+                }
+            }.onSuccess { a ->
+                _state.update { st ->
+                    if (forImage) st.copy(imageReference = a, attachBusy = false)
+                    else st.copy(attachments = (st.attachments + a).takeLast(5), attachBusy = false)
+                }
+            }.onFailure { e ->
+                _state.update { it.copy(attachBusy = false, error = e.message ?: "Anhang konnte nicht gelesen werden.") }
+            }
+        }
+    }
+
+    fun removeAttachment(id: String) = _state.update { st -> st.copy(attachments = st.attachments.filterNot { it.id == id }) }
+    fun removeImageReference() = _state.update { it.copy(imageReference = null) }
+
     fun generateText(input: String, targetLanguage: String? = null) {
-        if (input.isBlank() || _state.value.textBusy) return
+        val attachments = _state.value.attachments
+        if ((input.isBlank() && attachments.isEmpty()) || _state.value.textBusy) return
         textJob = viewModelScope.launch {
             val s = requireSettings() ?: return@launch
             val template = _state.value.template
@@ -175,8 +209,12 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                         ApiMessage("system", template.system),
                         ApiMessage(
                             "user",
-                            if (template.id == "translate" && targetLanguage != null) "Übersetze ins $targetLanguage:\n\n${input.trim()}"
-                            else input.trim()
+                            Attachments.composePrompt(
+                                (if (template.id == "translate" && targetLanguage != null) "Übersetze ins $targetLanguage:\n\n" else "") +
+                                    input.trim().ifBlank { "Bitte bearbeite die Anhänge entsprechend deiner Aufgabe." },
+                                attachments
+                            ),
+                            extraImages = attachments.flatMap { it.images }.take(10)
                         )
                     ),
                     temperature = if (template.id in setOf("translate", "improve", "analyze", "report")) 0.2 else 0.8,
@@ -204,14 +242,29 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             val s = requireSettings() ?: return@launch
             _state.update { it.copy(imageBusy = true, error = null) }
             try {
+                val reference = _state.value.imageReference
+                val finalPrompt = if (reference != null && reference.images.isNotEmpty()) {
+                    val description = app.mistral.complete(
+                        s.apiKey, s.chatModel,
+                        listOf(
+                            ApiMessage(
+                                "user",
+                                "Beschreibe dieses Bild präzise als Bild-Prompt (Motiv, Komposition, Perspektive, Farben, " +
+                                    "Licht, Stil). Gib nur die Beschreibung aus.",
+                                extraImages = reference.images.take(3)
+                            )
+                        )
+                    )
+                    "Vorlage: $description\n\nWunsch/Änderung: ${prompt.trim()}"
+                } else prompt.trim()
                 val images = try {
                     val agent = s.imageAgentId ?: createAgent(s)
-                    app.mistral.generateImages(s.apiKey, agent, prompt.trim())
+                    app.mistral.generateImages(s.apiKey, agent, finalPrompt)
                 } catch (e: MistralException) {
                     // Agent wurde evtl. gelöscht oder gehört zu einem anderen Konto → einmal neu anlegen.
                     if (e.code == 404 || e.code == 422) {
                         val agent = createAgent(s)
-                        app.mistral.generateImages(s.apiKey, agent, prompt.trim())
+                        app.mistral.generateImages(s.apiKey, agent, finalPrompt)
                     } else {
                         throw e
                     }
@@ -244,7 +297,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
     fun saveToGallery(item: GeneratedImageItem) {
         viewModelScope.launch {
             val ok = withContext(Dispatchers.IO) { ImageUtils.saveToGallery(app, item.file) }
-            _state.update { it.copy(error = if (ok) "In der Galerie gespeichert (Bilder/EU KI-GenC)." else "Speichern fehlgeschlagen.") }
+            _state.update { it.copy(error = if (ok) "In der Galerie gespeichert (Bilder/KI-GenC)." else "Speichern fehlgeschlagen.") }
         }
     }
 }

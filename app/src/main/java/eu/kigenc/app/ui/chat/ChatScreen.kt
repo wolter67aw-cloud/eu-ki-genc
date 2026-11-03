@@ -200,7 +200,7 @@ fun ChatScreen(
                             EuFlag(Modifier.height(14.dp))
                             Spacer(Modifier.size(8.dp))
                             Text(
-                                if (isCode) "Code-Assistent" else "EU KI-GenC",
+                                if (isCode) "Code-Assistent" else "KI-GenC",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -237,7 +237,7 @@ fun ChatScreen(
                 attachedImage = state.attachedImage,
                 streaming = state.streaming,
                 allowImages = !isCode,
-                placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag EU KI-GenC …",
+                placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag KI-GenC …",
                 onRemoveImage = vm::removeImage,
                 onPickImage = { pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                 onCamera = launchCamera,

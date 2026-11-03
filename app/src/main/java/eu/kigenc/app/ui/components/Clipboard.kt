@@ -21,7 +21,7 @@ fun rememberCopyToClipboard(): (String) -> Unit {
     val scope = rememberCoroutineScope()
     return { text ->
         scope.launch {
-            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("EU KI-GenC", text)))
+            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("KI-GenC", text)))
             Toast.makeText(context, "Kopiert", Toast.LENGTH_SHORT).show()
         }
     }

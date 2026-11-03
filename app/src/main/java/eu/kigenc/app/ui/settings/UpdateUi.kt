@@ -55,11 +55,11 @@ fun UpdateDialog(
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                     }
                     is UpdateState.NeedsPermission -> Text(
-                        "Damit sich EU KI-GenC selbst aktualisieren kann, erlaube bitte einmalig " +
+                        "Damit sich KI-GenC selbst aktualisieren kann, erlaube bitte einmalig " +
                             "„Unbekannte Apps installieren“ für diese App. Danach erneut auf „Installieren“ tippen."
                     )
                     else -> {
-                        Text("Eine neue Version von EU KI-GenC ist verfügbar.")
+                        Text("Eine neue Version von KI-GenC ist verfügbar.")
                         if (info.notes.isNotBlank()) {
                             Spacer(Modifier.height(12.dp))
                             Text("Neu:", style = MaterialTheme.typography.labelLarge)

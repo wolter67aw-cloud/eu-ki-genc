@@ -283,7 +283,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             item {
                 ListItem(
                     leadingContent = { EuFlag(Modifier.height(20.dp)) },
-                    headlineContent = { Text("EU KI-GenC ${app.updates.currentVersionName}") },
+                    headlineContent = { Text("KI-GenC ${app.updates.currentVersionName}") },
                     supportingContent = {
                         Text(
                             "Unabhängige App – kein offizielles Angebot der Europäischen Union.\n" +

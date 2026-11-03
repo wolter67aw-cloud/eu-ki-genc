@@ -157,7 +157,7 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
         viewModelScope.launch {
             val file = render(adjust) ?: return@launch
             val ok = withContext(Dispatchers.IO) { ImageUtils.saveToGallery(app, file, "image/jpeg") }
-            message.value = if (ok) "In der Galerie gespeichert (Bilder/EU KI-GenC)." else "Speichern fehlgeschlagen."
+            message.value = if (ok) "In der Galerie gespeichert (Bilder/KI-GenC)." else "Speichern fehlgeschlagen."
         }
     }
 

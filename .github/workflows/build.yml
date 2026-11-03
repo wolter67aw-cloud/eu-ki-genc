@@ -64,20 +64,20 @@ jobs:
           ./gradlew assembleRelease --stacktrace
 
       - name: APK bereitstellen
-        run: cp app/build/outputs/apk/release/app-release.apk EU-KI-GenC.apk
+        run: cp app/build/outputs/apk/release/app-release.apk KI-GenC.apk
 
       - name: Build-Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
-          name: EU-KI-GenC-1.0.${{ github.run_number }}
-          path: EU-KI-GenC.apk
+          name: KI-GenC-1.0.${{ github.run_number }}
+          path: KI-GenC.apk
 
       - name: Release veröffentlichen
         if: steps.signing.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: EU KI-GenC 1.0.${{ github.run_number }}
+          name: KI-GenC 1.0.${{ github.run_number }}
           body: ${{ github.event.head_commit.message || 'Neuer Build' }}
-          files: EU-KI-GenC.apk
+          files: KI-GenC.apk
           make_latest: true

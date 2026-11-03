@@ -50,7 +50,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val notification = NotificationCompat.Builder(ctx, KiApp.CHANNEL_UPDATES)
             .setSmallIcon(R.drawable.ic_stat_update)
             .setContentTitle("Update verfügbar: ${info.versionName}")
-            .setContentText("Tippen, um EU KI-GenC zu aktualisieren.")
+            .setContentText("Tippen, um KI-GenC zu aktualisieren.")
             .setAutoCancel(true)
             .setContentIntent(open)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
