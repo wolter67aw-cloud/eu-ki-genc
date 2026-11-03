@@ -1,5 +1,6 @@
 package eu.kigenc.app.ui.tools
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -460,6 +462,21 @@ class SlideshowViewModel(app: KiApp) : AiToolViewModel(app) {
         result.value = null
     }
 
+    /** Neue Datei für eine Live-Aufnahme mit der Kamera. */
+    fun newRecordingFile(): File =
+        File(File(app.filesDir, "videos").apply { mkdirs() }, "aufnahme_${System.currentTimeMillis()}.mp4")
+
+    fun onRecorded(file: File?, ok: Boolean) {
+        // Manche Kamera-Apps melden „abgebrochen“, obwohl gespeichert wurde – daher zählt die Datei.
+        if (file != null && file.exists() && file.length() > 0) {
+            result.value = file
+            message.value = "Aufnahme fertig – du kannst sie abspielen, speichern oder teilen."
+        } else {
+            file?.delete()
+            message.value = if (ok) "Die Kamera-App hat kein Video gespeichert." else "Aufnahme abgebrochen."
+        }
+    }
+
     fun create(seconds: Float, title: String) {
         val list = images.value
         if (list.isEmpty() || progress.value != null) return
@@ -498,14 +515,37 @@ fun SlideshowScreen(vm: SlideshowViewModel, onBack: () -> Unit, modifier: Modifi
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
         if (uris.isNotEmpty()) vm.setImages(uris)
     }
+    var recordingPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val capture = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { ok ->
+        val file = recordingPath?.let(::File)
+        vm.onRecorded(file, ok)
+        recordingPath = null
+    }
+    val startRecording = {
+        val file = vm.newRecordingFile()
+        recordingPath = file.absolutePath
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        try {
+            capture.launch(uri)
+        } catch (_: ActivityNotFoundException) {
+            vm.message.value = "Keine Kamera-App gefunden."
+        }
+    }
 
     ToolScaffold("Video erstellen", onBack, modifier, message, vm::clearMessage) { inner ->
         LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
                 Text(
-                    "Erstelle aus deinen Fotos ein Diashow-Video (MP4, 720p). Alles passiert direkt auf deinem Handy.",
+                    "Nimm ein Video live mit der Handykamera auf oder erstelle aus deinen Fotos ein Diashow-Video (MP4, 720p). " +
+                        "Alles passiert direkt auf deinem Handy.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            item {
+                Button(onClick = startRecording, enabled = progress == null, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Outlined.Videocam, null); Spacer(Modifier.size(8.dp))
+                    Text("Video live aufnehmen")
+                }
             }
             item {
                 OutlinedButton(
@@ -550,7 +590,7 @@ fun SlideshowScreen(vm: SlideshowViewModel, onBack: () -> Unit, modifier: Modifi
             }
             result?.let { file ->
                 item {
-                    Text("Fertig! ${file.length() / 1024} KB", style = MaterialTheme.typography.titleMedium)
+                    Text("Video bereit: ${file.name} (${file.length() / 1024} KB)", style = MaterialTheme.typography.titleMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = {
                             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
