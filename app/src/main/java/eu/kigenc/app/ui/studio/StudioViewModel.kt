@@ -19,7 +19,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import eu.kigenc.app.KiApp
 import eu.kigenc.app.ai.ApiMessage
-import eu.kigenc.app.ai.MistralException
+import eu.kigenc.app.ai.ImageGenerator
 import eu.kigenc.app.ai.friendlyMessage
 import eu.kigenc.app.data.AppSettings
 import eu.kigenc.app.data.Attachment
@@ -257,21 +257,8 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                     )
                     "Vorlage: $description\n\nWunsch/Änderung: ${prompt.trim()}"
                 } else prompt.trim()
-                val images = try {
-                    val agent = s.imageAgentId ?: createAgent(s)
-                    app.mistral.generateImages(s.apiKey, agent, finalPrompt)
-                } catch (e: MistralException) {
-                    // Agent wurde evtl. gelöscht oder gehört zu einem anderen Konto → einmal neu anlegen.
-                    if (e.code == 404 || e.code == 422) {
-                        val agent = createAgent(s)
-                        app.mistral.generateImages(s.apiKey, agent, finalPrompt)
-                    } else {
-                        throw e
-                    }
-                }
-                val items = withContext(Dispatchers.IO) {
-                    images.map { GeneratedImageItem(ImageUtils.saveGenerated(app, it.bytes), prompt.trim(), it.caption) }
-                }
+                val files = ImageGenerator.generate(app, s, finalPrompt)
+                val items = files.map { GeneratedImageItem(it, prompt.trim(), "") }
                 _state.update { it.copy(images = items + it.images) }
             } catch (e: CancellationException) {
                 throw e

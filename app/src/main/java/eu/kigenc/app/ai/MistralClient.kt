@@ -341,44 +341,62 @@ class MistralClient {
     data class GeneratedImage(val bytes: ByteArray, val caption: String)
 
     /** Erzeugt Bilder über die Conversations-API und lädt sie herunter. */
+    /** Bild über einen vorhandenen Agenten erzeugen. */
     suspend fun generateImages(apiKey: String, agentId: String, prompt: String): List<GeneratedImage> =
         withContext(Dispatchers.IO) {
             val body = JSONObject()
                 .put("agent_id", agentId)
                 .put("inputs", prompt)
-            val c = open("/conversations", "POST", apiKey, readTimeoutMs = 180_000)
-            val response = try {
-                c.sendJson(body)
-                c.readJson()
-            } finally {
-                c.disconnect()
-            }
+            imagesFromConversation(apiKey, body)
+        }
 
-            val outputs = response.optJSONArray("outputs") ?: JSONArray()
-            val fileIds = mutableListOf<String>()
-            val caption = StringBuilder()
-            for (i in 0 until outputs.length()) {
-                val entry = outputs.optJSONObject(i) ?: continue
-                if (entry.optString("type") != "message.output") continue
-                when (val content = entry.opt("content")) {
-                    is String -> caption.append(content)
-                    is JSONArray -> for (j in 0 until content.length()) {
-                        val chunk = content.optJSONObject(j) ?: continue
-                        when (chunk.optString("type")) {
-                            "tool_file" -> chunk.optString("file_id").takeIf { it.isNotBlank() }?.let(fileIds::add)
-                            "text" -> caption.append(chunk.optString("text"))
-                        }
+    /** Bild direkt über die Conversations-API mit dem eingebauten Werkzeug erzeugen – ohne eigenen Agenten. */
+    suspend fun generateImagesDirect(apiKey: String, model: String, prompt: String): List<GeneratedImage> =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("model", model)
+                .put(
+                    "instructions",
+                    "Du bist ein Bildgenerator. Nutze für jede Anfrage das Werkzeug image_generation und erzeuge genau ein Bild."
+                )
+                .put("inputs", JSONArray().put(JSONObject().put("role", "user").put("content", "Erzeuge ein Bild: $prompt")))
+                .put("tools", JSONArray().put(JSONObject().put("type", "image_generation")))
+            imagesFromConversation(apiKey, body)
+        }
+
+    private fun imagesFromConversation(apiKey: String, body: JSONObject): List<GeneratedImage> {
+        val c = open("/conversations", "POST", apiKey, readTimeoutMs = 180_000)
+        val response = try {
+            c.sendJson(body)
+            c.readJson()
+        } finally {
+            c.disconnect()
+        }
+        val outputs = response.optJSONArray("outputs") ?: JSONArray()
+        val fileIds = mutableListOf<String>()
+        val caption = StringBuilder()
+        for (i in 0 until outputs.length()) {
+            val entry = outputs.optJSONObject(i) ?: continue
+            if (entry.optString("type") != "message.output") continue
+            when (val content = entry.opt("content")) {
+                is String -> caption.append(content)
+                is JSONArray -> for (j in 0 until content.length()) {
+                    val chunk = content.optJSONObject(j) ?: continue
+                    when (chunk.optString("type")) {
+                        "tool_file" -> chunk.optString("file_id").takeIf { it.isNotBlank() }?.let(fileIds::add)
+                        "text" -> caption.append(chunk.optString("text"))
                     }
                 }
             }
-            if (fileIds.isEmpty()) {
-                throw MistralException(
-                    0,
-                    caption.toString().ifBlank { "Es wurde kein Bild erzeugt. Bitte Beschreibung anpassen." }
-                )
-            }
-            fileIds.map { id -> GeneratedImage(downloadFile(apiKey, id), caption.toString().trim()) }
         }
+        if (fileIds.isEmpty()) {
+            throw MistralException(
+                0,
+                "Mistral hat kein Bild erzeugt" + caption.toString().trim().take(200).let { if (it.isBlank()) "." else ": $it" }
+            )
+        }
+        return fileIds.map { id -> GeneratedImage(downloadFile(apiKey, id), caption.toString().trim()) }
+    }
 
     private fun downloadFile(apiKey: String, fileId: String): ByteArray {
         val c = open("/files/$fileId/content", "GET", apiKey, readTimeoutMs = 120_000)
