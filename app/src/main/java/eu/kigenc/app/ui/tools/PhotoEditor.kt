@@ -210,7 +210,7 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                 val file = ImageGenerator.generate(app, s, prompt).firstOrNull()
                     ?: error("Mistral hat kein Bild zurückgeschickt. Bitte erneut versuchen.")
                 aiImage.value = file
-                aiStatus.value = "Fertig ✓ – das neue Bild siehst du direkt hier darunter und oben."
+                aiStatus.value = "Fertig ✓ (erzeugt mit ${ImageGenerator.lastProvider}) – das neue Bild siehst du direkt hier darunter und oben."
             } catch (e: kotlinx.coroutines.CancellationException) {
                 aiStatus.value = null
                 throw e

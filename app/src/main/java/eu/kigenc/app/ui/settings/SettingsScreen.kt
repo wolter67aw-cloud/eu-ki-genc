@@ -102,6 +102,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     var keyStatus by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var modelPicker by remember { mutableStateOf<String?>(null) } // "chat" | "code"
     var confirmDelete by remember { mutableStateOf(false) }
+    var showImageProvider by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         keyInput = app.settings.current().apiKey
@@ -195,6 +196,9 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
             item {
                 SettingRow(Icons.Outlined.Code, "Code-Modell", settings.codeModel) { modelPicker = "code" }
+            }
+            item {
+                SettingRow(Icons.Outlined.Palette, "Bildgenerator", imageProviderLabel(settings.imageProvider)) { showImageProvider = true }
             }
 
             item { SectionTitle("Darstellung & Sprache") }
@@ -355,6 +359,56 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         )
     }
 
+    if (showImageProvider) {
+        var bflInput by remember { mutableStateOf(settings.bflKey) }
+        AlertDialog(
+            onDismissRequest = { showImageProvider = false },
+            title = { Text("Bildgenerator wählen") },
+            text = {
+                Column(
+                    Modifier
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    IMAGE_PROVIDERS.forEach { (id, title, desc) ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .selectable(selected = settings.imageProvider == id, role = Role.RadioButton) {
+                                    scope.launch { app.settings.setImageProvider(id) }
+                                }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(selected = settings.imageProvider == id, onClick = null)
+                            Spacer(Modifier.size(8.dp))
+                            Column {
+                                Text(title)
+                                Text(desc, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    if (settings.imageProvider == AppSettings.IMAGE_BFL) {
+                        OutlinedTextField(
+                            value = bflInput, onValueChange = { bflInput = it },
+                            label = { Text("Black-Forest-Labs-Schlüssel") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                        )
+                        TextButton(onClick = { uri.openUri("https://dashboard.bfl.ai/") }) { Text("Schlüssel bei bfl.ai erstellen") }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (settings.imageProvider == AppSettings.IMAGE_BFL) scope.launch { app.settings.setBflKey(bflInput) }
+                    showImageProvider = false
+                }) { Text("Fertig") }
+            }
+        )
+    }
+
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
@@ -375,6 +429,15 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         )
     }
 }
+
+private val IMAGE_PROVIDERS = listOf(
+    Triple(AppSettings.IMAGE_AUTO, "Automatisch (empfohlen)", "Erst Mistral – klappt das nicht (z. B. im Gratis-Tarif), kostenlos über Pollinations."),
+    Triple(AppSettings.IMAGE_MISTRAL, "Mistral AI", "FLUX über Mistral (EU). Im Gratis-Tarif oft nicht verfügbar."),
+    Triple(AppSettings.IMAGE_POLLINATIONS, "Pollinations (kostenlos)", "Ohne Schlüssel, etwa 1 Bild pro 15 Sekunden. Nur der Bildtext wird übertragen."),
+    Triple(AppSettings.IMAGE_BFL, "Black Forest Labs (FLUX)", "Deutscher Anbieter aus Freiburg, eigener Schlüssel, Abrechnung pro Bild."),
+)
+
+private fun imageProviderLabel(id: String) = IMAGE_PROVIDERS.firstOrNull { it.first == id }?.second ?: "Automatisch (empfohlen)"
 
 @Composable
 private fun SectionTitle(text: String) {

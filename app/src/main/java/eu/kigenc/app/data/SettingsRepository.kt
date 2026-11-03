@@ -24,6 +24,8 @@ data class AppSettings(
     val dynamicColor: Boolean = false,
     val imageAgentId: String? = null,
     val cachedModels: List<String> = emptyList(),
+    val imageProvider: String = IMAGE_AUTO,
+    val bflKey: String = "",
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
@@ -33,6 +35,12 @@ data class AppSettings(
         const val DEFAULT_CHAT_MODEL = "mistral-medium-latest"
         const val DEFAULT_CODE_MODEL = "codestral-latest"
         const val IMAGE_AGENT_MODEL = "mistral-medium-latest"
+
+        // Bildgeneratoren
+        const val IMAGE_AUTO = "auto"            // Mistral, bei Fehler Pollinations
+        const val IMAGE_MISTRAL = "mistral"
+        const val IMAGE_POLLINATIONS = "pollinations"
+        const val IMAGE_BFL = "bfl"
     }
 }
 
@@ -47,6 +55,8 @@ class SettingsRepository(private val context: Context) {
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val IMAGE_AGENT = stringPreferencesKey("image_agent_id")
         val MODELS = stringPreferencesKey("cached_models")
+        val IMAGE_PROVIDER = stringPreferencesKey("image_provider")
+        val BFL_KEY = stringPreferencesKey("bfl_key_enc")
     }
 
     val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
@@ -59,6 +69,8 @@ class SettingsRepository(private val context: Context) {
             dynamicColor = p[Keys.DYNAMIC_COLOR] ?: false,
             imageAgentId = p[Keys.IMAGE_AGENT],
             cachedModels = p[Keys.MODELS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
+            imageProvider = p[Keys.IMAGE_PROVIDER] ?: AppSettings.IMAGE_AUTO,
+            bflKey = p[Keys.BFL_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
         )
     }.flowOn(Dispatchers.IO)
 
@@ -79,6 +91,13 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setImageAgentId(id: String?) = context.dataStore.edit {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)
+    }
+
+    suspend fun setImageProvider(v: String) = context.dataStore.edit { it[Keys.IMAGE_PROVIDER] = v }
+
+    suspend fun setBflKey(key: String) = context.dataStore.edit {
+        val t = key.trim()
+        if (t.isEmpty()) it.remove(Keys.BFL_KEY) else it.set(Keys.BFL_KEY, Crypto.encrypt(t))
     }
 
     suspend fun setCachedModels(models: List<String>) =
