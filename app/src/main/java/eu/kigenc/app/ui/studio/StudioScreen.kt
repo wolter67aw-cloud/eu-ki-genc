@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.AssistChip
@@ -69,6 +70,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -211,8 +213,21 @@ private fun TextStudio(
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                AttachmentPickers(busy = state.attachBusy, onPicked = { kind, uri -> vm.addAttachment(kind, uri) })
+                AttachmentPickers(busy = state.attachBusy, onPicked = { kind, uris -> vm.addAttachments(kind, uris) })
                 AttachmentChips(state.attachments, onRemove = vm::removeAttachment)
+                if (state.attachments.isNotEmpty()) {
+                    val imageCount = state.attachments.sumOf { it.images.size }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${state.attachments.size} Anhang/Anhänge" +
+                                if (imageCount > StudioViewModel.MAX_IMAGES) " · ${StudioViewModel.MAX_IMAGES} von $imageCount Bildern werden gleichmäßig verteilt gesendet" else "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = vm::clearAttachments) { Text("Alle entfernen") }
+                    }
+                }
             }
         }
         if (state.template.id == "translate") {
@@ -325,7 +340,8 @@ private fun ImageStudio(
                 busy = state.attachBusy,
                 kinds = listOf(AttachmentKind.PHOTO, AttachmentKind.VIDEO),
                 labelPrefix = "Vorlage: ",
-                onPicked = { kind, uri -> vm.addAttachment(kind, uri, forImage = true) }
+                multiple = false,
+                onPicked = { kind, uris -> vm.addAttachments(kind, uris, forImage = true) }
             )
             state.imageReference?.let { ref ->
                 AttachmentChips(listOf(ref), onRemove = { vm.removeImageReference() })
@@ -443,41 +459,46 @@ private fun ImageStudio(
 }
 
 
-/** Buttons zum Hinzufügen von Foto, Video oder Datei. */
+/** Buttons zum Hinzufügen von Fotos, Videos oder Dateien – auf Wunsch mehrere auf einmal. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AttachmentPickers(
     busy: Boolean,
-    onPicked: (AttachmentKind, Uri) -> Unit,
+    onPicked: (AttachmentKind?, List<Uri>) -> Unit,
     kinds: List<AttachmentKind> = AttachmentKind.entries,
     labelPrefix: String = "",
+    multiple: Boolean = true,
 ) {
-    val photo = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { onPicked(AttachmentKind.PHOTO, it) }
-    }
-    val video = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let { onPicked(AttachmentKind.VIDEO, it) }
-    }
-    val file = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { onPicked(AttachmentKind.FILE, it) }
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Mehrfachauswahl (bis zu 10) bzw. Einzelauswahl
+    val photosMulti = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { onPicked(AttachmentKind.PHOTO, it) }
+    val videosMulti = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(5)) { onPicked(AttachmentKind.VIDEO, it) }
+    val mixedMulti = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { onPicked(null, it) }
+    val filesMulti = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { onPicked(AttachmentKind.FILE, it) }
+    val photoSingle = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> onPicked(AttachmentKind.PHOTO, listOf(u)) } }
+    val videoSingle = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> onPicked(AttachmentKind.VIDEO, listOf(u)) } }
+    val fileTypes = arrayOf(
+        "application/pdf", "text/*", "application/json",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "image/*", "video/*", "*/*"
+    )
+    val images = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+    val videos = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
         kinds.forEach { kind ->
             AssistChip(
                 onClick = {
                     when (kind) {
-                        AttachmentKind.PHOTO -> photo.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        AttachmentKind.VIDEO -> video.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
-                        AttachmentKind.FILE -> file.launch(
-                            arrayOf(
-                                "application/pdf", "text/*", "application/json",
-                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                "image/*", "video/*", "*/*"
-                            )
-                        )
+                        AttachmentKind.PHOTO -> if (multiple) photosMulti.launch(images) else photoSingle.launch(images)
+                        AttachmentKind.VIDEO -> if (multiple) videosMulti.launch(videos) else videoSingle.launch(videos)
+                        AttachmentKind.FILE -> filesMulti.launch(fileTypes)
                     }
                 },
                 enabled = !busy,
-                label = { Text(labelPrefix + kind.label) },
+                label = { Text(labelPrefix + if (multiple && kind != AttachmentKind.FILE) kind.label + "s" else kind.label + if (multiple) "en" else "") },
                 leadingIcon = {
                     Icon(
                         when (kind) {
@@ -488,6 +509,14 @@ private fun AttachmentPickers(
                         null, Modifier.size(18.dp)
                     )
                 }
+            )
+        }
+        if (multiple) {
+            AssistChip(
+                onClick = { mixedMulti.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)) },
+                enabled = !busy,
+                label = { Text("Mehr Bilder & Videos") },
+                leadingIcon = { Icon(Icons.Outlined.Collections, null, Modifier.size(18.dp)) }
             )
         }
         if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)

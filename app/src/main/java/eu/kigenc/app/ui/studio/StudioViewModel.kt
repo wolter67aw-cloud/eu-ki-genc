@@ -140,6 +140,29 @@ data class StudioUiState(
 
 class StudioViewModel(private val app: KiApp) : ViewModel() {
 
+    companion object {
+        const val MAX_ATTACHMENTS = 10
+        /** Höchstzahl Bilder pro Anfrage – gleichmäßig auf alle Anhänge verteilt. */
+        const val MAX_IMAGES = 8
+
+        fun selectImages(attachments: List<Attachment>, max: Int): List<String> {
+            val queues = attachments.map { it.images.toMutableList() }.filter { it.isNotEmpty() }
+            val result = mutableListOf<String>()
+            var progress = true
+            while (result.size < max && progress) {
+                progress = false
+                for (q in queues) {
+                    if (result.size >= max) break
+                    if (q.isNotEmpty()) {
+                        result += q.removeAt(0)
+                        progress = true
+                    }
+                }
+            }
+            return result
+        }
+    }
+
     private val _state = MutableStateFlow(StudioUiState())
     val state: StateFlow<StudioUiState> = _state.asStateFlow()
     private var textJob: Job? = null
@@ -167,28 +190,58 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
         return s
     }
 
-    /** Fügt einen Anhang (Foto, Video oder Datei) hinzu. Für [forImage] = true als Bildvorlage. */
-    fun addAttachment(kind: AttachmentKind, uri: Uri, forImage: Boolean = false) {
+    /**
+     * Fügt einen oder mehrere Anhänge hinzu. [kind] = null → Foto/Video wird am Dateityp erkannt.
+     * Für [forImage] = true wird der erste als Bildvorlage verwendet.
+     */
+    fun addAttachments(kind: AttachmentKind?, uris: List<Uri>, forImage: Boolean = false) {
+        if (uris.isEmpty()) return
         viewModelScope.launch {
             _state.update { it.copy(attachBusy = true) }
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    when (kind) {
-                        AttachmentKind.PHOTO -> Attachments.photo(app, uri)
-                        AttachmentKind.VIDEO -> Attachments.video(app, uri)
-                        AttachmentKind.FILE -> Attachments.file(app, uri)
+            val added = mutableListOf<Attachment>()
+            var failed = 0
+            for (uri in if (forImage) uris.take(1) else uris.take(MAX_ATTACHMENTS)) {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        val k = kind ?: run {
+                            val mime = app.contentResolver.getType(uri).orEmpty()
+                            if (mime.startsWith("video/")) AttachmentKind.VIDEO else AttachmentKind.PHOTO
+                        }
+                        when (k) {
+                            AttachmentKind.PHOTO -> Attachments.photo(app, uri)
+                            AttachmentKind.VIDEO -> Attachments.video(app, uri)
+                            AttachmentKind.FILE -> Attachments.file(app, uri)
+                        }
+                    }
+                }.onSuccess { added += it }
+                    .onFailure { e ->
+                        failed++
+                        _state.update { it.copy(error = e.message ?: "Anhang konnte nicht gelesen werden.") }
+                    }
+            }
+            _state.update { st ->
+                when {
+                    forImage -> st.copy(imageReference = added.firstOrNull() ?: st.imageReference, attachBusy = false)
+                    else -> {
+                        val all = st.attachments + added
+                        st.copy(
+                            attachments = all.takeLast(MAX_ATTACHMENTS),
+                            attachBusy = false,
+                            error = when {
+                                all.size > MAX_ATTACHMENTS -> "Maximal $MAX_ATTACHMENTS Anhänge – die ältesten wurden entfernt."
+                                failed > 0 && added.isNotEmpty() -> "${added.size} hinzugefügt, $failed konnte(n) nicht gelesen werden."
+                                else -> st.error
+                            }
+                        )
                     }
                 }
-            }.onSuccess { a ->
-                _state.update { st ->
-                    if (forImage) st.copy(imageReference = a, attachBusy = false)
-                    else st.copy(attachments = (st.attachments + a).takeLast(5), attachBusy = false)
-                }
-            }.onFailure { e ->
-                _state.update { it.copy(attachBusy = false, error = e.message ?: "Anhang konnte nicht gelesen werden.") }
             }
         }
     }
+
+    fun addAttachment(kind: AttachmentKind, uri: Uri, forImage: Boolean = false) = addAttachments(kind, listOf(uri), forImage)
+
+    fun clearAttachments() = _state.update { it.copy(attachments = emptyList()) }
 
     fun removeAttachment(id: String) = _state.update { st -> st.copy(attachments = st.attachments.filterNot { it.id == id }) }
     fun removeImageReference() = _state.update { it.copy(imageReference = null) }
@@ -214,7 +267,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                                     input.trim().ifBlank { "Bitte bearbeite die Anhänge entsprechend deiner Aufgabe." },
                                 attachments
                             ),
-                            extraImages = attachments.flatMap { it.images }.take(10)
+                            extraImages = selectImages(attachments, MAX_IMAGES)
                         )
                     ),
                     temperature = if (template.id in setOf("translate", "improve", "analyze", "report")) 0.2 else 0.8,
