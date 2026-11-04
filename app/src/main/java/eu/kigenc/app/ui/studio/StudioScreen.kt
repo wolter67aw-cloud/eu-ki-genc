@@ -340,16 +340,20 @@ private fun ImageStudio(
                 busy = state.attachBusy,
                 kinds = listOf(AttachmentKind.PHOTO, AttachmentKind.VIDEO),
                 labelPrefix = "Vorlage: ",
-                multiple = false,
+                multiple = true,
                 onPicked = { kind, uris -> vm.addAttachments(kind, uris, forImage = true) }
             )
-            state.imageReference?.let { ref ->
-                AttachmentChips(listOf(ref), onRemove = { vm.removeImageReference() })
-                Text(
-                    "Die KI beschreibt die Vorlage und erzeugt daraus ein neues Bild nach deinem Wunsch.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            if (state.imageReferences.isNotEmpty()) {
+                AttachmentChips(state.imageReferences, onRemove = vm::removeImageReference)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${state.imageReferences.size} Vorlage(n). Die KI nutzt sie gemeinsam für das neue Bild.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = vm::clearImageReferences) { Text("Alle entfernen") }
+                }
             }
         }
         item {
@@ -370,7 +374,7 @@ private fun ImageStudio(
                         val full = if (style != null) "$prompt\nStil: $style" else prompt
                         vm.generateImage(full.ifBlank { "Neue Variante dieser Vorlage" })
                     },
-                    enabled = (prompt.isNotBlank() || state.imageReference != null) && !state.imageBusy,
+                    enabled = (prompt.isNotBlank() || state.imageReferences.isNotEmpty()) && !state.imageBusy,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(Icons.Outlined.Palette, null, Modifier.size(18.dp))

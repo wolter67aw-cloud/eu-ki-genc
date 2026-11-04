@@ -135,13 +135,14 @@ data class StudioUiState(
     val error: String? = null,
     val attachments: List<Attachment> = emptyList(),
     val attachBusy: Boolean = false,
-    val imageReference: Attachment? = null,
+    val imageReferences: List<Attachment> = emptyList(),
 )
 
 class StudioViewModel(private val app: KiApp) : ViewModel() {
 
     companion object {
         const val MAX_ATTACHMENTS = 10
+        const val MAX_REFERENCES = 6
         /** Höchstzahl Bilder pro Anfrage – gleichmäßig auf alle Anhänge verteilt. */
         const val MAX_IMAGES = 8
 
@@ -200,7 +201,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             _state.update { it.copy(attachBusy = true) }
             val added = mutableListOf<Attachment>()
             var failed = 0
-            for (uri in if (forImage) uris.take(1) else uris.take(MAX_ATTACHMENTS)) {
+            for (uri in uris.take(if (forImage) MAX_REFERENCES else MAX_ATTACHMENTS)) {
                 runCatching {
                     withContext(Dispatchers.IO) {
                         val k = kind ?: run {
@@ -221,7 +222,14 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             }
             _state.update { st ->
                 when {
-                    forImage -> st.copy(imageReference = added.firstOrNull() ?: st.imageReference, attachBusy = false)
+                    forImage -> {
+                        val all = st.imageReferences + added
+                        st.copy(
+                            imageReferences = all.takeLast(MAX_REFERENCES),
+                            attachBusy = false,
+                            error = if (all.size > MAX_REFERENCES) "Maximal $MAX_REFERENCES Vorlagen – die ältesten wurden entfernt." else st.error
+                        )
+                    }
                     else -> {
                         val all = st.attachments + added
                         st.copy(
@@ -244,7 +252,8 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
     fun clearAttachments() = _state.update { it.copy(attachments = emptyList()) }
 
     fun removeAttachment(id: String) = _state.update { st -> st.copy(attachments = st.attachments.filterNot { it.id == id }) }
-    fun removeImageReference() = _state.update { it.copy(imageReference = null) }
+    fun removeImageReference(id: String) = _state.update { st -> st.copy(imageReferences = st.imageReferences.filterNot { it.id == id }) }
+    fun clearImageReferences() = _state.update { it.copy(imageReferences = emptyList()) }
 
     fun generateText(input: String, targetLanguage: String? = null) {
         val attachments = _state.value.attachments
@@ -295,33 +304,40 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             val s = requireSettings() ?: return@launch
             _state.update { it.copy(imageBusy = true, error = null) }
             try {
-                val reference = _state.value.imageReference
-                if (reference != null && reference.kind == AttachmentKind.PHOTO && reference.images.isNotEmpty() &&
-                    ImageGenerator.canEditFaithfully(s)
-                ) {
-                    // Echtes Foto gesichtstreu bearbeiten statt neu malen.
-                    val thumb = reference.thumbnail
-                    val b64 = reference.images.first().substringAfter("base64,")
-                    val file = ImageGenerator.editFaithfully(app, s, b64, thumb?.width ?: 1, thumb?.height ?: 1, prompt)
+                val refs = _state.value.imageReferences
+                val photos = refs.filter { it.kind == AttachmentKind.PHOTO && it.images.isNotEmpty() }
+                if (photos.isNotEmpty() && ImageGenerator.canEditFaithfully(s)) {
+                    // Echte Fotos gesichtstreu bearbeiten statt neu malen (bis zu 4 Bilder als Referenz).
+                    val first = photos.first()
+                    val extra = (photos.drop(1).map { it.images.first() } +
+                        refs.filter { it.kind == AttachmentKind.VIDEO }.mapNotNull { v -> v.images.getOrNull(v.images.size / 2) })
+                        .take(3).map { it.substringAfter("base64,") }
+                    val wish = if (extra.isEmpty()) prompt else
+                        "$prompt (Bild 1 ist das Hauptfoto; die weiteren Bilder sind zusätzliche Vorlagen für Personen, Stil oder Inhalt)"
+                    val file = ImageGenerator.editFaithfully(
+                        app, s, first.images.first().substringAfter("base64,"),
+                        first.thumbnail?.width ?: 1, first.thumbnail?.height ?: 1, wish, extra
+                    )
                     _state.update { it.copy(images = listOf(GeneratedImageItem(file, prompt.trim(), "")) + it.images) }
                     return@launch
                 }
-                val finalPrompt = if (reference != null && reference.images.isNotEmpty()) {
+                val finalPrompt = if (refs.isNotEmpty()) {
                     val description = app.mistral.complete(
                         s.apiKey, s.chatModel,
                         listOf(
                             ApiMessage(
                                 "user",
-                                "Beschreibe dieses Bild präzise als Bild-Prompt (Motiv, bei Personen Gesicht, Haare, Hautton, " +
-                                    "Alter, Ausdruck und Pose genau; Komposition, Perspektive, Farben, Licht, Stil). " +
-                                    "Gib nur die Beschreibung aus.",
-                                extraImages = reference.images.take(3)
+                                "Hier sind ${refs.size} Vorlage(n) (Fotos bzw. Standbilder aus Videos). Beschreibe sie präzise als " +
+                                    "EINEN gemeinsamen Bild-Prompt: wichtige Motive, bei Personen Gesicht, Haare, Hautton, Alter, " +
+                                    "Ausdruck und Pose genau; Komposition, Farben, Licht, Stil. Gib nur die Beschreibung aus.",
+                                extraImages = selectImages(refs, MAX_IMAGES)
                             )
                         )
-                    )
-                    "Vorlage: $description\n\nWunsch/Änderung: ${prompt.trim()}. Natürliche, unverzerrte Gesichter mit korrekten Proportionen."
+                    ).take(1800)
+                    "Vorlagen: $description\n\nWunsch/Änderung: ${prompt.trim()}. Natürliche, unverzerrte Gesichter mit korrekten Proportionen."
                 } else prompt.trim()
-                val (gw, gh) = reference?.thumbnail?.let { ImageGenerator.sizeFor(it.width, it.height) } ?: (1024 to 1024)
+                val firstThumb = refs.firstOrNull()?.thumbnail
+                val (gw, gh) = firstThumb?.let { ImageGenerator.sizeFor(it.width, it.height) } ?: (1024 to 1024)
                 val files = ImageGenerator.generate(app, s, finalPrompt, gw, gh)
                 val items = files.map { GeneratedImageItem(it, prompt.trim(), "") }
                 _state.update { it.copy(images = items + it.images) }

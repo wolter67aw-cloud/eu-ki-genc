@@ -60,16 +60,19 @@ object ExternalImageClient {
      * Black Forest Labs FLUX.1 Kontext – bearbeitet das echte Foto (Bild-zu-Bild).
      * Dadurch bleiben Gesichter und Personen erhalten, statt neu gemalt zu werden.
      */
-    suspend fun blackForestLabsEdit(apiKey: String, prompt: String, imageBase64: String, aspectRatio: String): ByteArray =
-        bflJob(
-            apiKey, "flux-kontext-pro",
-            JSONObject()
-                .put("prompt", prompt)
-                .put("input_image", imageBase64)
-                .put("aspect_ratio", aspectRatio)
-                .put("output_format", "jpeg")
-                .put("safety_tolerance", 2)
-        )
+    suspend fun blackForestLabsEdit(
+        apiKey: String, prompt: String, imageBase64: String, aspectRatio: String, extra: List<String> = emptyList(),
+    ): ByteArray {
+        val body = JSONObject()
+            .put("prompt", prompt)
+            .put("input_image", imageBase64)
+            .put("aspect_ratio", aspectRatio)
+            .put("output_format", "jpeg")
+            .put("safety_tolerance", 2)
+        // Zusätzliche Referenzbilder (input_image_2 … input_image_4)
+        extra.take(3).forEachIndexed { i, img -> body.put("input_image_${i + 2}", img) }
+        return bflJob(apiKey, "flux-kontext-pro", body)
+    }
 
     private suspend fun bflJob(apiKey: String, endpoint: String, body: JSONObject): ByteArray =
         withContext(Dispatchers.IO) {

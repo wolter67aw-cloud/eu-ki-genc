@@ -55,14 +55,17 @@ object ImageGenerator {
      * Bearbeitet ein echtes Foto mit FLUX Kontext. Gesicht, Identität und Proportionen bleiben erhalten.
      * [imageBase64] ist das JPEG als Base64 (ohne „data:“-Präfix).
      */
-    suspend fun editFaithfully(app: KiApp, s: AppSettings, imageBase64: String, width: Int, height: Int, instruction: String): File {
+    suspend fun editFaithfully(
+        app: KiApp, s: AppSettings, imageBase64: String, width: Int, height: Int, instruction: String,
+        extraImagesBase64: List<String> = emptyList(),
+    ): File {
         if (!canEditFaithfully(s)) throw MistralException(0, "Für gesichtstreue Bearbeitung bitte unter „Optionen → Bildgenerator“ einen Black-Forest-Labs-Schlüssel eintragen.")
         val wish = instruction.trim().ifBlank { "Improve the photo quality: better lighting, sharper details, natural colors." }
         val prompt = "Edit this photo as requested: \"$wish\". " +
             "Keep the exact same person(s): identical face, facial features, identity, age, skin tone, eye shape, " +
             "hairstyle, expression, body proportions and pose. Do not distort, beautify or replace any face. " +
             "Keep the original framing and aspect ratio. Only apply the requested change."
-        val bytes = ExternalImageClient.blackForestLabsEdit(s.bflKey, prompt, imageBase64, aspectRatio(width, height))
+        val bytes = ExternalImageClient.blackForestLabsEdit(s.bflKey, prompt, imageBase64, aspectRatio(width, height), extraImagesBase64)
         lastProvider = "FLUX Kontext (gesichtstreu)"
         return withContext(Dispatchers.IO) { ImageUtils.saveGenerated(app, bytes) }
     }
