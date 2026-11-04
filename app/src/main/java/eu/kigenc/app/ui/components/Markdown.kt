@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -327,8 +328,9 @@ fun CodeBlock(language: String, code: String, onCopy: (String) -> Unit) {
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            val highlighted = remember(code, language) { SyntaxHighlighter.highlight(code, language) }
             Text(
-                code,
+                highlighted,
                 fontFamily = FontFamily.Monospace,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
@@ -338,6 +340,97 @@ fun CodeBlock(language: String, code: String, onCopy: (String) -> Unit) {
                     .horizontalScroll(rememberScrollState())
                     .padding(12.dp)
             )
+        }
+    }
+}
+
+
+/** Einfache Syntax-Hervorhebung für Codeblöcke (Schlüsselwörter, Texte, Kommentare, Zahlen). */
+object SyntaxHighlighter {
+    private val keywordColor = Color(0xFFC792EA)
+    private val stringColor = Color(0xFFC3E88D)
+    private val commentColor = Color(0xFF7F8AA8)
+    private val numberColor = Color(0xFFF78C6C)
+    private val typeColor = Color(0xFF82AAFF)
+
+    private val keywords = setOf(
+        // Kotlin/Java/C#/Swift
+        "fun", "val", "var", "class", "object", "interface", "data", "sealed", "enum", "when", "if", "else", "for", "while",
+        "do", "return", "break", "continue", "import", "package", "private", "public", "protected", "internal", "override",
+        "open", "abstract", "suspend", "inline", "null", "true", "false", "this", "super", "new", "static", "final", "void",
+        "try", "catch", "finally", "throw", "throws", "is", "in", "as", "let", "const", "struct", "func", "switch", "case",
+        "default", "extends", "implements", "async", "await", "yield", "lambda", "def", "pass", "None", "True", "False",
+        "and", "or", "not", "from", "with", "elif", "except", "raise", "global", "nonlocal", "function", "typeof",
+        "instanceof", "export", "using", "namespace", "public", "int", "long", "double", "float", "bool", "boolean", "char",
+        "string", "String", "echo", "then", "fi", "esac", "done", "SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE",
+        "JOIN", "ON", "GROUP", "BY", "ORDER", "AS", "AND", "OR", "NOT", "INTO", "VALUES", "CREATE", "TABLE", "select",
+        "from", "where", "join", "group", "order", "by",
+    )
+
+    private val hashComments = setOf("python", "py", "bash", "sh", "shell", "zsh", "ruby", "rb", "yaml", "yml", "r", "toml", "dockerfile", "perl")
+    private val sqlComments = setOf("sql")
+
+    fun highlight(code: String, language: String): AnnotatedString {
+        if (code.length > 20_000) return AnnotatedString(code)
+        val lang = language.lowercase().trim()
+        val hash = lang in hashComments
+        val dashDash = lang in sqlComments
+        return buildAnnotatedString {
+            var i = 0
+            val n = code.length
+            while (i < n) {
+                val c = code[i]
+                // Kommentare
+                if ((!hash && c == '/' && i + 1 < n && code[i + 1] == '/') || (hash && c == '#') ||
+                    (dashDash && c == '-' && i + 1 < n && code[i + 1] == '-')
+                ) {
+                    val end = code.indexOf('\n', i).let { if (it < 0) n else it }
+                    withStyle(SpanStyle(color = commentColor, fontStyle = FontStyle.Italic)) { append(code, i, end) }
+                    i = end
+                    continue
+                }
+                if (!hash && c == '/' && i + 1 < n && code[i + 1] == '*') {
+                    val end = code.indexOf("*/", i + 2).let { if (it < 0) n else it + 2 }
+                    withStyle(SpanStyle(color = commentColor, fontStyle = FontStyle.Italic)) { append(code, i, end) }
+                    i = end
+                    continue
+                }
+                // Zeichenketten
+                if (c == '"' || c == '\'' || c == '`') {
+                    var j = i + 1
+                    while (j < n && code[j] != c && code[j] != '\n') {
+                        if (code[j] == '\\') j++
+                        j++
+                    }
+                    val end = minOf(n, j + 1)
+                    withStyle(SpanStyle(color = stringColor)) { append(code, i, end) }
+                    i = end
+                    continue
+                }
+                // Zahlen
+                if (c.isDigit() && (i == 0 || !code[i - 1].isLetterOrDigit())) {
+                    var j = i
+                    while (j < n && (code[j].isLetterOrDigit() || code[j] == '.' || code[j] == '_')) j++
+                    withStyle(SpanStyle(color = numberColor)) { append(code, i, j) }
+                    i = j
+                    continue
+                }
+                // Wörter
+                if (c.isLetter() || c == '_') {
+                    var j = i
+                    while (j < n && (code[j].isLetterOrDigit() || code[j] == '_')) j++
+                    val word = code.substring(i, j)
+                    when {
+                        word in keywords -> withStyle(SpanStyle(color = keywordColor, fontWeight = FontWeight.SemiBold)) { append(word) }
+                        word.first().isUpperCase() && word.length > 1 -> withStyle(SpanStyle(color = typeColor)) { append(word) }
+                        else -> append(word)
+                    }
+                    i = j
+                    continue
+                }
+                append(c)
+                i++
+            }
         }
     }
 }

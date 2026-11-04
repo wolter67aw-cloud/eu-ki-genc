@@ -36,6 +36,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PlayCircle
 import androidx.compose.material.icons.outlined.Videocam
@@ -276,6 +279,7 @@ object SlideshowEncoder {
         uris: List<Uri>,
         secondsPerSlide: Float,
         title: String?,
+        crossfade: Boolean = true,
         onProgress: (Float) -> Unit,
     ): File = withContext(Dispatchers.Default) {
         val out = File(File(context.filesDir, "videos").apply { mkdirs() }, "diashow_${System.currentTimeMillis()}.mp4")
@@ -333,20 +337,41 @@ object SlideshowEncoder {
             val framesPerSlide = max(1, (secondsPerSlide * FPS).roundToInt())
             val total = framesPerSlide * uris.size
             var frame = 0L
-            uris.forEachIndexed { slideIndex, uri ->
+            fun writeFrame(yuv: Yuv) {
+                val idx = nextInput()
+                val image = codec.getInputImage(idx) ?: error("Der Video-Encoder dieses Geräts wird nicht unterstützt.")
+                writeYuv(image, yuv)
+                codec.queueInputBuffer(idx, 0, W * H * 3 / 2, frame * 1_000_000L / FPS, 0)
+                frame++
+                drain(false)
+                onProgress((frame.toFloat() / total).coerceAtMost(1f))
+            }
+
+            // Weiche Überblendung zwischen den Fotos (ca. 0,7 Sekunden)
+            val fade = if (crossfade && uris.size > 1) min(framesPerSlide / 2, (0.7f * FPS).roundToInt()) else 0
+            var current: Bitmap? = renderSlide(context, uris[0], title)
+            var currentYuv = toYuv(current!!)
+            for (i in uris.indices) {
                 ensureActive()
-                val slide = renderSlide(context, uri, if (slideIndex == 0) title else null)
-                val yuv = toYuv(slide)
-                slide.recycle()
-                repeat(framesPerSlide) {
-                    val idx = nextInput()
-                    val image = codec.getInputImage(idx) ?: error("Der Video-Encoder dieses Geräts wird nicht unterstützt.")
-                    writeYuv(image, yuv)
-                    codec.queueInputBuffer(idx, 0, W * H * 3 / 2, frame * 1_000_000L / FPS, 0)
-                    frame++
-                    drain(false)
-                    onProgress(frame.toFloat() / total)
+                val next = if (i + 1 < uris.size) renderSlide(context, uris[i + 1], null) else null
+                val staticFrames = framesPerSlide - if (next != null) fade else 0
+                repeat(staticFrames) { writeFrame(currentYuv) }
+                val cur = current
+                if (next != null && fade > 0 && cur != null) {
+                    val blend = Bitmap.createBitmap(W, H, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(blend)
+                    val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+                    for (f in 1..fade) {
+                        canvas.drawBitmap(cur, 0f, 0f, null)
+                        paint.alpha = (255f * f / (fade + 1)).roundToInt()
+                        canvas.drawBitmap(next, 0f, 0f, paint)
+                        writeFrame(toYuv(blend))
+                    }
+                    blend.recycle()
                 }
+                cur?.recycle()
+                current = next
+                if (next != null) currentYuv = toYuv(next)
             }
             val idx = nextInput()
             codec.queueInputBuffer(idx, 0, 0, frame * 1_000_000L / FPS, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
@@ -401,9 +426,9 @@ object SlideshowEncoder {
         }
     }.getOrNull()
 
-    private class Yuv(val y: ByteArray, val u: ByteArray, val v: ByteArray)
+    class Yuv(val y: ByteArray, val u: ByteArray, val v: ByteArray)
 
-    private fun toYuv(bmp: Bitmap): Yuv {
+    fun toYuv(bmp: Bitmap): Yuv {
         val px = IntArray(W * H)
         bmp.getPixels(px, 0, W, 0, 0, W, H)
         val y = ByteArray(W * H)
@@ -478,13 +503,31 @@ class SlideshowViewModel(app: KiApp) : AiToolViewModel(app) {
         }
     }
 
-    fun create(seconds: Float, title: String) {
+    val music = MutableStateFlow<Uri?>(null)
+    val musicName = MutableStateFlow<String?>(null)
+
+    fun setMusic(uri: Uri?) {
+        music.value = uri
+        musicName.value = uri?.let { eu.kigenc.app.data.Attachments.displayName(app, it) }
+    }
+
+    fun create(seconds: Float, title: String, crossfade: Boolean = true) {
         val list = images.value
         if (list.isEmpty() || progress.value != null) return
         viewModelScope.launch {
             progress.value = 0f
             try {
-                result.value = SlideshowEncoder.encode(app, list, seconds, title.trim().ifBlank { null }) { progress.value = it }
+                val video = SlideshowEncoder.encode(app, list, seconds, title.trim().ifBlank { null }, crossfade) { progress.value = it * 0.9f }
+                val audio = music.value
+                result.value = if (audio != null) {
+                    runCatching { AudioMixer.addMusic(app, video, audio) }.getOrElse { e ->
+                        if (e is CancellationException) throw e
+                        eu.kigenc.app.data.ErrorLog.log("Musik", e)
+                        message.value = "Musik konnte nicht eingefügt werden (${e.message ?: "Format nicht unterstützt"}) – Video ohne Ton erstellt."
+                        video
+                    }
+                } else video
+                progress.value = 1f
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -513,6 +556,9 @@ fun SlideshowScreen(vm: SlideshowViewModel, onBack: () -> Unit, modifier: Modifi
     val message by vm.message.collectAsStateWithLifecycle()
     var seconds by rememberSaveable { mutableFloatStateOf(3f) }
     var title by rememberSaveable { mutableStateOf("") }
+    var crossfade by rememberSaveable { mutableStateOf(true) }
+    val musicName by vm.musicName.collectAsStateWithLifecycle()
+    val pickMusic = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) vm.setMusic(uri) }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(30)) { uris ->
         if (uris.isNotEmpty()) vm.setImages(uris)
     }
@@ -576,6 +622,24 @@ fun SlideshowScreen(vm: SlideshowViewModel, onBack: () -> Unit, modifier: Modifi
                 }
                 item { LabeledSlider("Sekunden pro Foto", seconds, 1f..6f) { seconds = it } }
                 item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = crossfade, onCheckedChange = { crossfade = it })
+                        Text("Weiche Übergänge zwischen den Fotos")
+                    }
+                }
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { pickMusic.launch(arrayOf("audio/*")) }) {
+                            Icon(Icons.Outlined.MusicNote, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp))
+                            Text(if (musicName == null) "Hintergrundmusik wählen" else "Musik ändern")
+                        }
+                        if (musicName != null) {
+                            Text(musicName ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.weight(1f))
+                            IconButton(onClick = { vm.setMusic(null) }) { Icon(Icons.Filled.Close, "Musik entfernen") }
+                        }
+                    }
+                }
+                item {
                     OutlinedTextField(
                         value = title, onValueChange = { title = it },
                         label = { Text("Titel (optional, auf dem ersten Bild)") },
@@ -583,7 +647,7 @@ fun SlideshowScreen(vm: SlideshowViewModel, onBack: () -> Unit, modifier: Modifi
                     )
                 }
                 item {
-                    Button(onClick = { vm.create(seconds, title) }, enabled = progress == null, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { vm.create(seconds, title, crossfade) }, enabled = progress == null, modifier = Modifier.fillMaxWidth()) {
                         Text(if (progress != null) "Erstelle Video … ${((progress ?: 0f) * 100).toInt()} %" else "Video erstellen")
                     }
                     progress?.let { LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth()) }

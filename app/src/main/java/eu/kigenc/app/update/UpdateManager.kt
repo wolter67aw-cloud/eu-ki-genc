@@ -55,7 +55,7 @@ class UpdateManager(private val context: Context) {
 
     /** Prüft auf ein neues Release. Gibt die Update-Info zurück, falls eine neuere Version existiert. */
     suspend fun check(): UpdateInfo? {
-        if (repo.isBlank()) {
+        if (repo.isBlank() || !BuildConfig.SELF_UPDATE) {
             _state.value = UpdateState.NotConfigured
             return null
         }

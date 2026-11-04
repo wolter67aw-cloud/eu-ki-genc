@@ -3,6 +3,7 @@
 package eu.kigenc.app.ui.chat
 
 import android.app.Activity
+import androidx.compose.material.icons.outlined.Flag
 import eu.kigenc.app.data.Conversation
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.outlined.Search
@@ -107,6 +108,7 @@ import eu.kigenc.app.data.ChatMode
 import eu.kigenc.app.data.Role
 import eu.kigenc.app.ui.components.EuFlag
 import eu.kigenc.app.ui.components.MarkdownText
+import eu.kigenc.app.ui.components.ReportDialog
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
 import java.io.File
@@ -138,6 +140,7 @@ fun ChatScreen(
     var renaming by remember { mutableStateOf<Conversation?>(null) }
     var renameText by remember { mutableStateOf("") }
     var historyQuery by remember { mutableStateOf("") }
+    var reporting by remember { mutableStateOf<String?>(null) }
     val isCode = vm.mode == ChatMode.CODE
 
     LaunchedEffect(state.error) {
@@ -303,6 +306,9 @@ fun ChatScreen(
                         onEdit = if (!state.streaming && msg.role == Role.USER) {
                             { editing = msg; editText = msg.text }
                         } else null,
+                        onReport = if (msg.role == Role.ASSISTANT) {
+                            { reporting = msg.text }
+                        } else null,
                     )
                 }
             }
@@ -384,6 +390,10 @@ fun ChatScreen(
         )
     }
 
+    reporting?.let { text ->
+        ReportDialog(contentExcerpt = text, kind = "Chat-Antwort", onDismiss = { reporting = null })
+    }
+
     renaming?.let { conv ->
         AlertDialog(
             onDismissRequest = { renaming = null },
@@ -463,6 +473,7 @@ private fun MessageItem(
     onShare: () -> Unit,
     onRegenerate: (() -> Unit)? = null,
     onEdit: (() -> Unit)? = null,
+    onReport: (() -> Unit)? = null,
 ) {
     if (message.role == Role.USER) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
@@ -544,6 +555,11 @@ private fun MessageItem(
                         if (onRegenerate != null) {
                             IconButton(onClick = onRegenerate) {
                                 Icon(Icons.Outlined.Refresh, "Antwort neu erzeugen", Modifier.size(18.dp))
+                            }
+                        }
+                        if (onReport != null) {
+                            IconButton(onClick = onReport) {
+                                Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(18.dp))
                             }
                         }
                     }

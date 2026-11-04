@@ -63,6 +63,7 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         private const val NOTIFICATION_ID = 4711
 
         fun schedule(context: Context) {
+            if (!eu.kigenc.app.BuildConfig.SELF_UPDATE) return
             val request = PeriodicWorkRequestBuilder<UpdateWorker>(6, TimeUnit.HOURS)
                 .setConstraints(
                     Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()

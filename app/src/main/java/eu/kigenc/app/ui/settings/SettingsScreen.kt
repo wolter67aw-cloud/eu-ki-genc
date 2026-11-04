@@ -9,6 +9,7 @@ import eu.kigenc.app.data.BackupManager
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Policy
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import android.widget.Toast
@@ -256,7 +257,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     val statusText = when (val s = updateState) {
                         UpdateState.Checking -> "Suche nach Updates …"
                         UpdateState.UpToDate -> "Du hast die neueste Version ✓"
-                        UpdateState.NotConfigured -> "Diese Version wurde lokal gebaut – Selbst-Update ist deaktiviert."
+                        UpdateState.NotConfigured -> if (eu.kigenc.app.BuildConfig.SELF_UPDATE) "Diese Version wurde lokal gebaut – Selbst-Update ist deaktiviert." else "Updates erhältst du über Google Play."
                         is UpdateState.Available -> "Version ${s.info.versionName} ist verfügbar."
                         is UpdateState.Downloading -> "Lade herunter … ${(s.progress * 100).toInt()} %"
                         is UpdateState.Installing -> "Installation läuft …"
@@ -297,6 +298,16 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                                 "Dein Schlüssel wird mit dem Android-Keystore verschlüsselt. Unterhaltungen und Bilder " +
                                 "bleiben auf deinem Gerät. Es gibt keine Werbung und kein Tracking."
                         )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+            item {
+                ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Policy, null) },
+                    headlineContent = { Text("Datenschutzerklärung") },
+                    modifier = Modifier.clickable {
+                        uri.openUri("https://github.com/${app.updates.repo.ifBlank { "wolter67aw-cloud/eu-ki-genc" }}/blob/main/docs/datenschutz.md")
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                 )

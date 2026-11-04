@@ -10,6 +10,8 @@ val updateRepo = providers.environmentVariable("GITHUB_REPOSITORY").orNull
     ?: providers.gradleProperty("updateRepo").orNull
     ?: ""
 val keystoreFile = providers.environmentVariable("KEYSTORE_FILE").orNull
+// Optionale E-Mail für Meldungen von KI-Inhalten (Play-Store-Pflicht). In gradle.properties: reportEmail=…
+val reportEmail = providers.gradleProperty("reportEmail").orNull ?: ""
 
 android {
     namespace = "eu.kigenc.app"
@@ -22,6 +24,20 @@ android {
         versionCode = ciVersionCode
         versionName = ciVersionName
         buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
+        buildConfigField("String", "REPORT_EMAIL", "\"$reportEmail\"")
+    }
+
+    // Zwei Varianten: „github“ (mit Selbst-Update) und „play“ (Updates über Google Play, ohne Installationsrecht)
+    flavorDimensions += "store"
+    productFlavors {
+        create("github") {
+            dimension = "store"
+            buildConfigField("boolean", "SELF_UPDATE", "true")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+        }
     }
 
     signingConfigs {

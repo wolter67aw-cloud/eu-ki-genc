@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -92,6 +93,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import eu.kigenc.app.app
 import eu.kigenc.app.ui.components.MarkdownText
+import eu.kigenc.app.ui.components.ReportDialog
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareImage
 import eu.kigenc.app.ui.components.shareText
@@ -173,6 +175,8 @@ private fun TextStudio(
     val speakingId by tts.speakingId.collectAsStateWithLifecycle()
     val copy = rememberCopyToClipboard()
     var input by rememberSaveable { mutableStateOf("") }
+    var reportText by remember { mutableStateOf<String?>(null) }
+    reportText?.let { ReportDialog(contentExcerpt = it, kind = "Text", onDismiss = { reportText = null }) }
     var targetLanguage by rememberSaveable { mutableStateOf("Englische") }
 
     LazyColumn(
@@ -286,6 +290,9 @@ private fun TextStudio(
                                 IconButton(onClick = { context.shareText(state.textOutput) }) {
                                     Icon(Icons.Outlined.Share, "Teilen", Modifier.size(20.dp))
                                 }
+                                IconButton(onClick = { reportText = state.textOutput }) {
+                                    Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(20.dp))
+                                }
                                 if (state.template.id == "imgprompt") {
                                     Spacer(Modifier.weight(1f))
                                     FilledTonalButton(onClick = { onUseAsImagePrompt(state.textOutput.trim()) }) {
@@ -314,6 +321,8 @@ private fun ImageStudio(
     val context = LocalContext.current
     var style by rememberSaveable { mutableStateOf<String?>(null) }
     var fullscreen by remember { mutableStateOf<GeneratedImageItem?>(null) }
+    var reportImage by remember { mutableStateOf<String?>(null) }
+    reportImage?.let { ReportDialog(contentExcerpt = "Bild zum Prompt: $it", kind = "Bild", onDismiss = { reportImage = null }) }
 
     LazyColumn(
         contentPadding = PaddingValues(
@@ -432,6 +441,7 @@ private fun ImageStudio(
                     )
                     IconButton(onClick = { vm.saveToGallery(item) }) { Icon(Icons.Outlined.Download, "In Galerie speichern") }
                     IconButton(onClick = { context.shareImage(item.file) }) { Icon(Icons.Outlined.Share, "Teilen") }
+                    IconButton(onClick = { reportImage = item.prompt.ifBlank { item.file.name } }) { Icon(Icons.Outlined.Flag, "Bild melden") }
                     IconButton(onClick = { vm.deleteImage(item) }) { Icon(Icons.Outlined.Delete, "Löschen") }
                 }
             }

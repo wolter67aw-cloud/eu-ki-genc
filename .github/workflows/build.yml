@@ -61,16 +61,20 @@ jobs:
           KEY_ALIAS: eukigenc
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleGithubRelease bundlePlayRelease --stacktrace
 
       - name: APK bereitstellen
-        run: cp app/build/outputs/apk/release/app-release.apk KI-GenC.apk
+        run: |
+          cp app/build/outputs/apk/github/release/app-github-release.apk KI-GenC.apk
+          cp app/build/outputs/bundle/playRelease/app-play-release.aab KI-GenC-PlayStore.aab
 
       - name: Build-Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
           name: KI-GenC-1.0.${{ github.run_number }}
-          path: KI-GenC.apk
+          path: |
+            KI-GenC.apk
+            KI-GenC-PlayStore.aab
 
       - name: Release veröffentlichen
         if: steps.signing.outputs.signed == 'true' && github.ref == 'refs/heads/main'
@@ -79,5 +83,7 @@ jobs:
           tag_name: v1.0.${{ github.run_number }}
           name: KI-GenC 1.0.${{ github.run_number }}
           body: ${{ github.event.head_commit.message || 'Neuer Build' }}
-          files: KI-GenC.apk
+          files: |
+            KI-GenC.apk
+            KI-GenC-PlayStore.aab
           make_latest: true

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.StopCircle
@@ -30,7 +31,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +49,7 @@ import eu.kigenc.app.app
 import eu.kigenc.app.data.AppSettings
 import eu.kigenc.app.data.ResultStore
 import eu.kigenc.app.ui.components.MarkdownText
+import eu.kigenc.app.ui.components.ReportDialog
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
 import kotlinx.coroutines.CancellationException
@@ -181,6 +185,8 @@ fun ResultCard(text: String, busy: Boolean, speakId: String, modifier: Modifier 
     val tts = context.app.tts
     val speaking by tts.speakingId.collectAsStateWithLifecycle()
     val copy = rememberCopyToClipboard()
+    var reporting by remember { mutableStateOf(false) }
+    if (reporting) ReportDialog(contentExcerpt = text, kind = "KI-Ergebnis", onDismiss = { reporting = false })
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = modifier.fillMaxWidth()
@@ -205,6 +211,7 @@ fun ResultCard(text: String, busy: Boolean, speakId: String, modifier: Modifier 
                         )
                     }
                     IconButton(onClick = { context.shareText(text) }) { Icon(Icons.Outlined.Share, "Teilen", Modifier.size(20.dp)) }
+                    IconButton(onClick = { reporting = true }) { Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(20.dp)) }
                 }
             }
         }
