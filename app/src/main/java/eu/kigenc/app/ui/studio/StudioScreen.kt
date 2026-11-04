@@ -402,6 +402,33 @@ private fun ImageStudio(
                 }
             }
         }
+        state.imageStatus?.let { st ->
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(st, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        state.referenceDescription?.let { d ->
+                            Text(
+                                "So hat die KI deine Vorlagen erkannt:",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+                            Text(d, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                            if (!state.hasFaithfulEditing) {
+                                Text(
+                                    "Hinweis: Ohne Black-Forest-Labs-Schlüssel malt die KI nach dieser Beschreibung ein neues Bild – " +
+                                        "deine Fotos selbst werden nicht eingefügt.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
         if (state.images.isEmpty() && !state.imageBusy) {
             item {
                 Text(

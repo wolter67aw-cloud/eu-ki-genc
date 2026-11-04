@@ -137,6 +137,9 @@ data class StudioUiState(
     val attachments: List<Attachment> = emptyList(),
     val attachBusy: Boolean = false,
     val imageReferences: List<Attachment> = emptyList(),
+    val imageStatus: String? = null,
+    val referenceDescription: String? = null,
+    val hasFaithfulEditing: Boolean = false,
 )
 
 class StudioViewModel(private val app: KiApp) : ViewModel() {
@@ -170,6 +173,9 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
     private var textJob: Job? = null
 
     init {
+        viewModelScope.launch {
+            app.settings.settings.collect { st -> _state.update { it.copy(hasFaithfulEditing = st.bflKey.isNotBlank()) } }
+        }
         viewModelScope.launch {
             val existing = withContext(Dispatchers.IO) {
                 ImageUtils.generatedDir(app).listFiles { f -> f.extension.lowercase() in setOf("png", "jpg", "jpeg", "webp") }.orEmpty()
@@ -315,6 +321,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                 val photos = refs.filter { it.kind == AttachmentKind.PHOTO && it.images.isNotEmpty() }
                 if (photos.isNotEmpty() && ImageGenerator.canEditFaithfully(s)) {
                     // Echte Fotos gesichtstreu bearbeiten statt neu malen (bis zu 4 Bilder als Referenz).
+                    _state.update { it.copy(imageStatus = "Deine Fotos werden gesichtstreu bearbeitet (FLUX Kontext) …") }
                     val first = photos.first()
                     val extra = (photos.drop(1).map { it.images.first() } +
                         refs.filter { it.kind == AttachmentKind.VIDEO }.mapNotNull { v -> v.images.getOrNull(v.images.size / 2) })
@@ -325,33 +332,34 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                         app, s, first.images.first().substringAfter("base64,"),
                         first.thumbnail?.width ?: 1, first.thumbnail?.height ?: 1, wish, extra
                     )
-                    _state.update { it.copy(images = listOf(GeneratedImageItem(file, prompt.trim(), "")) + it.images) }
+                    _state.update { it.copy(images = listOf(GeneratedImageItem(file, prompt.trim(), "")) + it.images, imageStatus = "Fertig ✓ (${ImageGenerator.lastProvider})") }
                     return@launch
                 }
                 val finalPrompt = if (refs.isNotEmpty()) {
-                    val description = app.mistral.complete(
-                        s.apiKey, s.chatModel,
-                        listOf(
-                            ApiMessage(
-                                "user",
-                                "Hier sind ${refs.size} Vorlage(n) (Fotos bzw. Standbilder aus Videos). Beschreibe sie präzise als " +
-                                    "EINEN gemeinsamen Bild-Prompt: wichtige Motive, bei Personen Gesicht, Haare, Hautton, Alter, " +
-                                    "Ausdruck und Pose genau; Komposition, Farben, Licht, Stil. Gib nur die Beschreibung aus.",
-                                extraImages = selectImages(refs, MAX_IMAGES)
-                            )
-                        )
-                    ).take(1800)
+                    _state.update { it.copy(imageStatus = "Die KI sieht sich deine ${refs.size} Vorlage(n) an …", referenceDescription = null) }
+                    val description = ImageGenerator.describeImages(
+                        app, s,
+                        "Hier sind ${refs.size} Vorlage(n) (Fotos bzw. Standbilder aus Videos). Beschreibe sie präzise als " +
+                            "EINEN gemeinsamen Bild-Prompt: wichtige Motive, bei Personen Gesicht, Haare, Hautton, Alter, " +
+                            "Ausdruck und Pose genau; Komposition, Farben, Licht, Stil. Gib nur die Beschreibung aus.",
+                        selectImages(refs, MAX_IMAGES)
+                    )
+                    _state.update { it.copy(referenceDescription = description, imageStatus = "Vorlagen erkannt ✓ – das Bild wird gemalt …") }
                     "Vorlagen: $description\n\nWunsch/Änderung: ${prompt.trim()}. Natürliche, unverzerrte Gesichter mit korrekten Proportionen."
-                } else prompt.trim()
+                } else {
+                    _state.update { it.copy(imageStatus = "Das Bild wird gemalt …") }
+                    prompt.trim()
+                }
                 val firstThumb = refs.firstOrNull()?.thumbnail
                 val (gw, gh) = firstThumb?.let { ImageGenerator.sizeFor(it.width, it.height) } ?: (1024 to 1024)
                 val files = ImageGenerator.generate(app, s, finalPrompt, gw, gh)
                 val items = files.map { GeneratedImageItem(it, prompt.trim(), "") }
-                _state.update { it.copy(images = items + it.images) }
+                _state.update { it.copy(images = items + it.images, imageStatus = "Fertig ✓ (${ImageGenerator.lastProvider})") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Bild konnte nicht erzeugt werden: ${e.report("Studio-Bild")}") }
+                val msg = "Bild konnte nicht erzeugt werden: ${e.report("Studio-Bild")}"
+                _state.update { it.copy(error = msg, imageStatus = "⚠️ $msg") }
             } finally {
                 _state.update { it.copy(imageBusy = false) }
             }

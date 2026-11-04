@@ -48,6 +48,26 @@ object ImageGenerator {
         return images.map { it.bytes }
     }
 
+    /**
+     * Lässt Bilder von einem Vision-Modell beschreiben. Kann das gewählte Chat-Modell keine Bilder,
+     * wird automatisch auf mistral-small-latest (mit Bildverständnis) ausgewichen.
+     */
+    suspend fun describeImages(app: KiApp, s: AppSettings, instruction: String, images: List<String>): String {
+        if (images.isEmpty()) return ""
+        val models = listOf(s.chatModel, MistralClient.FALLBACK_MODEL, "mistral-medium-latest").distinct()
+        var last: Exception? = null
+        for (m in models) {
+            try {
+                val text = app.mistral.complete(s.apiKey, m, listOf(ApiMessage("user", instruction, extraImages = images))).trim()
+                if (text.isNotBlank()) return text.take(1800)
+            } catch (e: MistralException) {
+                if (e.code == 401 || e.code == 429) throw e
+                last = e
+            }
+        }
+        throw last ?: MistralException(0, "Die KI konnte die Bilder nicht erkennen.")
+    }
+
     /** true, wenn gesichtstreue Bearbeitung (FLUX Kontext) möglich ist. */
     fun canEditFaithfully(s: AppSettings) = s.bflKey.isNotBlank()
 

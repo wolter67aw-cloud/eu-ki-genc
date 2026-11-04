@@ -207,19 +207,14 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                 if (!s.hasKey) error("Bitte zuerst deinen Mistral-API-Schlüssel unter „Optionen“ eintragen.")
                 aiStatus.value = "Schritt 1/2: Die KI sieht sich dein Foto an …"
                 val dataUrl = withContext(Dispatchers.IO) { ImageUtils.toDataUrl(path) } ?: error("Foto nicht lesbar.")
-                val description = app.mistral.complete(
-                    s.apiKey, s.chatModel,
-                    listOf(
-                        ApiMessage(
-                            "user",
-                            "Beschreibe dieses Foto sehr präzise als Bild-Prompt für einen Bildgenerator. Bei Personen: " +
-                                "Gesichtsform, Augen, Nase, Mund, Haare, Hautton, ungefähres Alter, Ausdruck, Kleidung und Pose " +
-                                "genau beschreiben (ohne Namen). Außerdem Komposition, Perspektive, Farben, Licht, Hintergrund. " +
-                                "Höchstens 150 Wörter. Gib nur die Beschreibung aus.",
-                            imageDataUrl = dataUrl
-                        )
-                    )
-                ).take(1800)
+                val description = ImageGenerator.describeImages(
+                    app, s,
+                    "Beschreibe dieses Foto sehr präzise als Bild-Prompt für einen Bildgenerator. Bei Personen: " +
+                        "Gesichtsform, Augen, Nase, Mund, Haare, Hautton, ungefähres Alter, Ausdruck, Kleidung und Pose " +
+                        "genau beschreiben (ohne Namen). Außerdem Komposition, Perspektive, Farben, Licht, Hintergrund. " +
+                        "Höchstens 150 Wörter. Gib nur die Beschreibung aus.",
+                    listOf(dataUrl)
+                )
                 if (description.isBlank()) error("Die KI konnte das Foto nicht beschreiben.")
                 aiStatus.value = "Schritt 2/2: Das neue Bild wird gemalt … (ca. 10–30 Sekunden)"
                 val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}. " +
