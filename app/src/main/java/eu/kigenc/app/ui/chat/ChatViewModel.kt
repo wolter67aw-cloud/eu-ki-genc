@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import eu.kigenc.app.data.report
 
 data class ChatUiState(
     val conversations: List<Conversation> = emptyList(),
@@ -85,6 +86,41 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun removeImage() = _state.update { it.copy(attachedImage = null) }
 
+    /** Letzte Antwort neu erzeugen. */
+    fun regenerate() {
+        val conv = _state.value.current ?: return
+        if (_state.value.streaming) return
+        val idx = conv.messages.indexOfLast { it.role == Role.USER }
+        if (idx < 0) return
+        val user = conv.messages[idx]
+        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImage = user.imagePath) }
+        send(user.text)
+    }
+
+    /** Eigene Nachricht bearbeiten und ab dort neu senden. */
+    fun editAndResend(messageId: String, newText: String) {
+        val conv = _state.value.current ?: return
+        if (_state.value.streaming || newText.isBlank()) return
+        val idx = conv.messages.indexOfFirst { it.id == messageId }
+        if (idx < 0) return
+        val original = conv.messages[idx]
+        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImage = original.imagePath) }
+        send(newText)
+    }
+
+    fun rename(conversation: Conversation, title: String) {
+        if (title.isBlank()) return
+        viewModelScope.launch {
+            val updated = conversation.copy(title = title.trim())
+            app.chatStore.save(updated)
+            _state.update { st ->
+                val cur = st.current
+                if (cur != null && cur.id == updated.id) st.copy(current = cur.copy(title = updated.title)) else st
+            }
+            reload()
+        }
+    }
+
     fun stop() {
         job?.cancel()
         job = null
@@ -124,6 +160,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
             val answer = StringBuilder()
             var failed: String? = null
+            var lastUiUpdate = 0L
             try {
                 app.mistral.streamChat(
                     apiKey = settings.apiKey,
@@ -132,6 +169,10 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     temperature = if (mode == ChatMode.CODE) 0.2 else 0.7,
                 ).collect { delta ->
                     answer.append(delta)
+                    // Anzeige höchstens ~20× pro Sekunde aktualisieren → flüssiges Scrollen auch bei langen Antworten.
+                    val now = System.currentTimeMillis()
+                    if (now - lastUiUpdate < 50) return@collect
+                    lastUiUpdate = now
                     val current = answer.toString()
                     _state.update { s ->
                         val conv = s.current ?: return@update s
@@ -144,7 +185,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             } catch (e: CancellationException) {
                 if (answer.isEmpty()) answer.append("_(abgebrochen)_")
             } catch (e: Exception) {
-                failed = e.friendlyMessage()
+                failed = e.report("Chat")
             } finally {
                 withContext(NonCancellable) {
                     val finalText = buildString {

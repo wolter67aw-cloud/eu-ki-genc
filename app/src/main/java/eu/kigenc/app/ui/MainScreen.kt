@@ -82,6 +82,11 @@ fun MainScreen(
     val studioVm: StudioViewModel = viewModel(key = "studio") { StudioViewModel(app) }
 
     val updateState by app.updates.state.collectAsStateWithLifecycle()
+    var showOnboarding by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("app_state", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("onboarding_done", false) && !app.settings.current().hasKey) showOnboarding = true
+    }
     var updateDismissed by rememberSaveable { mutableStateOf(false) }
 
     // Benachrichtigungen (für Update-Hinweise) einmalig erfragen.
@@ -141,6 +146,13 @@ fun MainScreen(
                 Tab.SETTINGS -> SettingsScreen(screenModifier)
             }
         }
+    }
+
+    if (showOnboarding) {
+        OnboardingDialog(onDone = {
+            context.getSharedPreferences("app_state", Context.MODE_PRIVATE).edit().putBoolean("onboarding_done", true).apply()
+            showOnboarding = false
+        })
     }
 
     val showUpdateDialog = when (updateState) {

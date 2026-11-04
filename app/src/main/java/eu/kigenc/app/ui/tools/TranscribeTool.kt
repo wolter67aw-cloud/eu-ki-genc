@@ -138,6 +138,7 @@ class TranscribeViewModel(app: KiApp) : AiToolViewModel(app) {
         launchAi { s ->
             val text = app.mistral.transcribe(s.apiKey, withContext(Dispatchers.IO) { file.readBytes() }, file.name, mime, language)
             transcript.value = text.ifBlank { "(Kein Text erkannt.)" }
+            if (text.isNotBlank()) saveResult("Transkription", "Transkript: ${file.name}", text)
         }
     }
 
@@ -146,7 +147,8 @@ class TranscribeViewModel(app: KiApp) : AiToolViewModel(app) {
         if (t.isBlank()) return
         stream(
             "Du verarbeitest Transkripte gesprochener Sprache. Antworte auf Deutsch in Markdown.",
-            ApiMessage("user", "$instruction\n\nTranskript:\n$t")
+            ApiMessage("user", "$instruction\n\nTranskript:\n$t"),
+            saveAs = "Transkription"
         )
     }
 

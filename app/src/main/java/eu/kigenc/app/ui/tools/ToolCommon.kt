@@ -44,6 +44,7 @@ import eu.kigenc.app.ai.ApiMessage
 import eu.kigenc.app.ai.friendlyMessage
 import eu.kigenc.app.app
 import eu.kigenc.app.data.AppSettings
+import eu.kigenc.app.data.ResultStore
 import eu.kigenc.app.ui.components.MarkdownText
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
@@ -51,6 +52,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import eu.kigenc.app.data.report
 
 /** Basis für alle KI-Werkzeuge: Statusanzeige, Fehlermeldungen und gestreamte Antworten. */
 open class AiToolViewModel(protected val app: KiApp) : ViewModel() {
@@ -69,25 +71,38 @@ open class AiToolViewModel(protected val app: KiApp) : ViewModel() {
     }
 
     /** Streamt eine Antwort in [output]. */
-    fun stream(system: String, user: ApiMessage, temperature: Double = 0.4, model: ((AppSettings) -> String)? = null) {
+    fun stream(
+        system: String,
+        user: ApiMessage,
+        temperature: Double = 0.4,
+        model: ((AppSettings) -> String)? = null,
+        saveAs: String? = null,
+    ) {
         if (busy.value) return
         job = viewModelScope.launch {
             val s = settingsOrNull() ?: return@launch
             busy.value = true
             output.value = ""
             val sb = StringBuilder()
+            var lastUi = 0L
             try {
                 app.mistral.streamChat(
                     s.apiKey, model?.invoke(s) ?: s.chatModel,
                     listOf(ApiMessage("system", system), user), temperature
                 ).collect {
                     sb.append(it)
-                    output.value = sb.toString()
+                    val now = System.currentTimeMillis()
+                    if (now - lastUi >= 50) {
+                        lastUi = now
+                        output.value = sb.toString()
+                    }
                 }
+                output.value = sb.toString()
+                if (saveAs != null) saveResult(saveAs, user.text, sb.toString())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                message.value = e.friendlyMessage()
+                message.value = e.report(javaClass.simpleName)
             } finally {
                 busy.value = false
             }
@@ -105,11 +120,16 @@ open class AiToolViewModel(protected val app: KiApp) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                message.value = e.friendlyMessage()
+                message.value = e.report(javaClass.simpleName)
             } finally {
                 busy.value = false
             }
         }
+    }
+
+    /** Ergebnis dauerhaft unter „Werkzeuge → Gespeicherte Ergebnisse“ ablegen. */
+    protected suspend fun saveResult(tool: String, title: String, text: String) {
+        runCatching { ResultStore.add(app, tool, title, text) }
     }
 
     fun stop() {

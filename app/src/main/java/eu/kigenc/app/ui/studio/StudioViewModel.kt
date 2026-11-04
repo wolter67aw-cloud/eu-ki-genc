@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import eu.kigenc.app.data.report
 
 data class TextTemplate(
     val id: String,
@@ -171,7 +172,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
     init {
         viewModelScope.launch {
             val existing = withContext(Dispatchers.IO) {
-                ImageUtils.generatedDir(app).listFiles { f -> f.extension == "png" }.orEmpty()
+                ImageUtils.generatedDir(app).listFiles { f -> f.extension.lowercase() in setOf("png", "jpg", "jpeg", "webp") }.orEmpty()
                     .sortedByDescending { it.lastModified() }
                     .map { GeneratedImageItem(it, "", "") }
             }
@@ -263,6 +264,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             val template = _state.value.template
             _state.update { it.copy(textBusy = true, textOutput = "", error = null) }
             val out = StringBuilder()
+            var lastUi = 0L
             try {
                 app.mistral.streamChat(
                     apiKey = s.apiKey,
@@ -282,12 +284,17 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                     temperature = if (template.id in setOf("translate", "improve", "analyze", "report")) 0.2 else 0.8,
                 ).collect { delta ->
                     out.append(delta)
-                    _state.update { it.copy(textOutput = out.toString()) }
+                    val now = System.currentTimeMillis()
+                    if (now - lastUi >= 50) {
+                        lastUi = now
+                        _state.update { it.copy(textOutput = out.toString()) }
+                    }
                 }
+                _state.update { it.copy(textOutput = out.toString()) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = e.friendlyMessage()) }
+                _state.update { it.copy(error = e.report("Studio-Text")) }
             } finally {
                 _state.update { it.copy(textBusy = false) }
             }
@@ -344,7 +351,7 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(error = "Bild konnte nicht erzeugt werden: ${e.friendlyMessage()}") }
+                _state.update { it.copy(error = "Bild konnte nicht erzeugt werden: ${e.report("Studio-Bild")}") }
             } finally {
                 _state.update { it.copy(imageBusy = false) }
             }

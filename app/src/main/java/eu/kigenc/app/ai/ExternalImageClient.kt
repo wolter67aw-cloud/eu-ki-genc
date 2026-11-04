@@ -105,7 +105,7 @@ object ExternalImageClient {
                 }
                 when (result?.optString("status")) {
                     "Ready" -> {
-                        val sample = result?.optJSONObject("result")?.optString("sample").orEmpty()
+                        val sample = result.optJSONObject("result")?.optString("sample").orEmpty()
                         if (sample.isBlank()) throw MistralException(0, "Black Forest Labs: kein Bild im Ergebnis.")
                         val img = get(sample)
                         return@withContext try {

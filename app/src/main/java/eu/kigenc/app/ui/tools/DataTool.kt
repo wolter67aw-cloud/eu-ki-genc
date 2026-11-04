@@ -248,7 +248,8 @@ class DataViewModel(app: KiApp) : AiToolViewModel(app) {
                 "Nutze die exakt berechneten Kennzahlen, statt selbst zu rechnen. Kennzeichne Prognosen klar als unsicher " +
                 "und nenne ihre Grenzen (z. B. wenige Datenpunkte, Saisonalität).",
             ApiMessage("user", prompt),
-            temperature = 0.2
+            temperature = 0.2,
+            saveAs = "Daten-Analyse"
         )
     }
 }

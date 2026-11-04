@@ -40,6 +40,11 @@ class ResearchViewModel(app: KiApp) : AiToolViewModel(app) {
             val result = app.mistral.webSearch(s.apiKey, s.chatModel, question)
             output.value = result.text.ifBlank { "Keine Antwort erhalten." }
             sources.value = result.sources
+            if (result.text.isNotBlank()) {
+                val withSources = result.text + if (result.sources.isEmpty()) "" else
+                    "\n\n**Quellen:**\n" + result.sources.mapIndexed { i, (t, u) -> "${i + 1}. [$t]($u)" }.joinToString("\n")
+                saveResult("Recherche", question, withSources)
+            }
         }
     }
 }

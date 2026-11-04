@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Context
 import eu.kigenc.app.ai.MistralClient
 import eu.kigenc.app.data.ChatStore
+import eu.kigenc.app.data.ErrorLog
 import eu.kigenc.app.data.SettingsRepository
 import eu.kigenc.app.ui.components.TtsController
 import eu.kigenc.app.update.UpdateManager
@@ -25,6 +26,7 @@ class KiApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ErrorLog.init(this)
         settings = SettingsRepository(this)
         chatStore = ChatStore(this)
         updates = UpdateManager(this)

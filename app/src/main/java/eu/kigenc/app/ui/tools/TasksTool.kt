@@ -243,7 +243,8 @@ class TasksViewModel(app: KiApp) : AiToolViewModel(app) {
                 "Heute ist ${LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMAN))}. " +
                     "Erstelle aus diesen offenen Aufgaben einen realistischen Plan für heute und die nächsten Tage " +
                     "mit Prioritäten (Eisenhower), Zeitblöcken und Pausen:\n$list"
-            )
+            ),
+            saveAs = "Tagesplan"
         )
     }
 }

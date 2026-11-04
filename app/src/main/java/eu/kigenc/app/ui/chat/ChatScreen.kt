@@ -3,6 +3,13 @@
 package eu.kigenc.app.ui.chat
 
 import android.app.Activity
+import eu.kigenc.app.data.Conversation
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -126,6 +133,11 @@ fun ChatScreen(
     val snackbar = remember { SnackbarHostState() }
     var input by rememberSaveable(vm.mode) { mutableStateOf("") }
     var showHistory by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<ChatMessage?>(null) }
+    var editText by remember { mutableStateOf("") }
+    var renaming by remember { mutableStateOf<Conversation?>(null) }
+    var renameText by remember { mutableStateOf("") }
+    var historyQuery by remember { mutableStateOf("") }
     val isCode = vm.mode == ChatMode.CODE
 
     LaunchedEffect(state.error) {
@@ -185,8 +197,15 @@ fun ChatScreen(
     val messages = state.current?.messages.orEmpty()
     val listState = rememberLazyListState()
     val lastLength = messages.lastOrNull()?.text?.length ?: 0
-    LaunchedEffect(messages.size, lastLength) {
+    LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex, Int.MAX_VALUE / 2)
+    }
+    LaunchedEffect(lastLength) {
+        // Während des Streamings nur mitscrollen, wenn man unten ist (kein Wegspringen beim Hochscrollen).
+        val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        if (state.streaming && messages.isNotEmpty() && lastVisible >= messages.lastIndex - 1) {
+            listState.scrollToItem(messages.lastIndex, Int.MAX_VALUE / 2)
+        }
     }
 
     Scaffold(
@@ -225,7 +244,7 @@ fun ChatScreen(
                         Icon(Icons.Outlined.EditNote, contentDescription = "Neue Unterhaltung")
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
@@ -278,6 +297,12 @@ fun ChatScreen(
                             if (speakingId == msg.id) app.tts.stop() else app.tts.speak(msg.id, msg.text)
                         },
                         onShare = { context.shareText(msg.text) },
+                        onRegenerate = if (!state.streaming && msg.role == Role.ASSISTANT && msg.id == messages.last().id) {
+                            { vm.regenerate() }
+                        } else null,
+                        onEdit = if (!state.streaming && msg.role == Role.USER) {
+                            { editing = msg; editText = msg.text }
+                        } else null,
                     )
                 }
             }
@@ -291,15 +316,29 @@ fun ChatScreen(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
             )
-            if (state.conversations.isEmpty()) {
+            OutlinedTextField(
+                value = historyQuery, onValueChange = { historyQuery = it },
+                placeholder = { Text("Verlauf durchsuchen …") },
+                leadingIcon = { Icon(Icons.Outlined.Search, null) },
+                singleLine = true, shape = RoundedCornerShape(24.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+            val filtered = remember(state.conversations, historyQuery) {
+                val q = historyQuery.trim()
+                if (q.isEmpty()) state.conversations
+                else state.conversations.filter { c ->
+                    c.title.contains(q, ignoreCase = true) || c.messages.any { it.text.contains(q, ignoreCase = true) }
+                }
+            }
+            if (filtered.isEmpty()) {
                 Text(
-                    "Noch keine Unterhaltungen.",
+                    if (state.conversations.isEmpty()) "Noch keine Unterhaltungen." else "Nichts gefunden.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(24.dp)
                 )
             }
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
-                items(state.conversations, key = { it.id }) { conv ->
+                items(filtered, key = { it.id }) { conv ->
                     ListItem(
                         headlineContent = { Text(conv.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
@@ -309,8 +348,13 @@ fun ChatScreen(
                             )
                         },
                         trailingContent = {
-                            IconButton(onClick = { vm.delete(conv) }) {
-                                Icon(Icons.Outlined.Delete, contentDescription = "Löschen")
+                            Row {
+                                IconButton(onClick = { renaming = conv; renameText = conv.title }) {
+                                    Icon(Icons.Outlined.Edit, contentDescription = "Umbenennen")
+                                }
+                                IconButton(onClick = { vm.delete(conv) }) {
+                                    Icon(Icons.Outlined.Delete, contentDescription = "Löschen")
+                                }
                             }
                         },
                         modifier = Modifier.clickable {
@@ -322,6 +366,34 @@ fun ChatScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    editing?.let { msg ->
+        AlertDialog(
+            onDismissRequest = { editing = null },
+            title = { Text("Nachricht bearbeiten") },
+            text = {
+                OutlinedTextField(value = editText, onValueChange = { editText = it }, minLines = 3, modifier = Modifier.fillMaxWidth())
+            },
+            confirmButton = {
+                TextButton(onClick = { vm.editAndResend(msg.id, editText); editing = null }, enabled = editText.isNotBlank()) {
+                    Text("Neu senden")
+                }
+            },
+            dismissButton = { TextButton(onClick = { editing = null }) { Text("Abbrechen") } }
+        )
+    }
+
+    renaming?.let { conv ->
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Unterhaltung umbenennen") },
+            text = { OutlinedTextField(value = renameText, onValueChange = { renameText = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+            confirmButton = {
+                TextButton(onClick = { vm.rename(conv, renameText); renaming = null }, enabled = renameText.isNotBlank()) { Text("Speichern") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Abbrechen") } }
+        )
     }
 }
 
@@ -389,6 +461,8 @@ private fun MessageItem(
     onCopy: (String) -> Unit,
     onSpeak: () -> Unit,
     onShare: () -> Unit,
+    onRegenerate: (() -> Unit)? = null,
+    onEdit: (() -> Unit)? = null,
 ) {
     if (message.role == Role.USER) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
@@ -408,7 +482,9 @@ private fun MessageItem(
             Surface(
                 shape = RoundedCornerShape(20.dp, 20.dp, 6.dp, 20.dp),
                 color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.widthIn(max = 320.dp)
+                modifier = Modifier
+                    .widthIn(max = 320.dp)
+                    .pointerInput(onEdit) { detectTapGestures(onLongPress = { onEdit?.invoke() }) }
             ) {
                 Text(
                     message.text,
@@ -416,6 +492,13 @@ private fun MessageItem(
                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)
                 )
+            }
+            if (onEdit != null) {
+                TextButton(onClick = onEdit) {
+                    Icon(Icons.Outlined.Edit, null, Modifier.size(14.dp))
+                    Spacer(Modifier.size(4.dp))
+                    Text("Bearbeiten", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     } else {
@@ -457,6 +540,11 @@ private fun MessageItem(
                         }
                         IconButton(onClick = onShare) {
                             Icon(Icons.Outlined.Share, "Teilen", Modifier.size(18.dp))
+                        }
+                        if (onRegenerate != null) {
+                            IconButton(onClick = onRegenerate) {
+                                Icon(Icons.Outlined.Refresh, "Antwort neu erzeugen", Modifier.size(18.dp))
+                            }
                         }
                     }
                 }

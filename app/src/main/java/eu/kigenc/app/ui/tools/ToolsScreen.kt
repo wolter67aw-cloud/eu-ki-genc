@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PhotoFilter
 import androidx.compose.material.icons.outlined.Slideshow
@@ -51,6 +52,7 @@ enum class Tool(val title: String, val subtitle: String, val icon: ImageVector, 
     DATA("Daten-Analyse", "Tabellen, Statistiken, Muster, Prognosen", Icons.Outlined.Insights, "Analyse & Daten"),
     TASKS("Aufgaben & Termine", "Planen, erinnern, in den Kalender eintragen", Icons.Outlined.Checklist, "Praktische Assistenz"),
     RESEARCH("Recherche", "Aktuelle Infos aus dem Web mit Quellen", Icons.Outlined.TravelExplore, "Praktische Assistenz"),
+    RESULTS("Gespeicherte Ergebnisse", "Recherchen, Transkripte, Analysen und Pläne wiederfinden", Icons.Outlined.Inventory2, "Verlauf"),
 }
 
 @Composable
@@ -69,6 +71,11 @@ fun ToolsScreen(modifier: Modifier = Modifier) {
         Tool.DATA -> DataScreen(viewModel(key = "tool_data") { DataViewModel(app) }, back, modifier)
         Tool.TASKS -> TasksScreen(viewModel(key = "tool_tasks") { TasksViewModel(app) }, back, modifier)
         Tool.RESEARCH -> ResearchScreen(viewModel(key = "tool_research") { ResearchViewModel(app) }, back, modifier)
+        Tool.RESULTS -> {
+            val vm: ResultsViewModel = viewModel(key = "tool_results") { ResultsViewModel(app) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }
+            ResultsScreen(vm, back, modifier)
+        }
     }
 }
 

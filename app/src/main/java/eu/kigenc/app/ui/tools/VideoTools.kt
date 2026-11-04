@@ -189,6 +189,7 @@ class VideoAnalysisViewModel(app: KiApp) : AiToolViewModel(app) {
                 sb.append(it)
                 output.value = sb.toString()
             }
+            saveResult("Video-Analyse", question.ifBlank { "Video-Zusammenfassung" }, sb.toString())
         }
     }
 }

@@ -71,6 +71,7 @@ class UpdateManager(private val context: Context) {
                 null
             }
         } catch (e: Exception) {
+            eu.kigenc.app.data.ErrorLog.log("Update-Prüfung", e)
             _state.value = UpdateState.Failed("Update-Prüfung fehlgeschlagen: ${e.message ?: e.javaClass.simpleName}")
             null
         }
@@ -133,6 +134,7 @@ class UpdateManager(private val context: Context) {
             _state.value = UpdateState.Installing(info)
             install(apk)
         } catch (e: Exception) {
+            eu.kigenc.app.data.ErrorLog.log("Update-Installation", e)
             _state.value = UpdateState.Failed("Update fehlgeschlagen: ${e.message ?: e.javaClass.simpleName}")
         }
     }
@@ -226,6 +228,7 @@ class UpdateManager(private val context: Context) {
     }
 
     fun onInstallResult(success: Boolean, message: String?) {
+        if (!success) eu.kigenc.app.data.ErrorLog.log("Installation", message = message)
         _state.value = if (success) UpdateState.UpToDate
         else UpdateState.Failed("Installation abgebrochen${message?.let { ": $it" } ?: "."}")
     }

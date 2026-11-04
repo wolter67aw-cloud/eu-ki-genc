@@ -54,14 +54,28 @@ object ImageUtils {
         "data:image/jpeg;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP)
     }.getOrNull()
 
+    /** Erkennt das echte Bildformat an den ersten Bytes. */
+    fun extensionFor(bytes: ByteArray): String = when {
+        bytes.size > 3 && bytes[0] == 0x89.toByte() && bytes[1] == 'P'.code.toByte() -> "png"
+        bytes.size > 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xD8.toByte() -> "jpg"
+        bytes.size > 11 && String(bytes, 8, 4, Charsets.US_ASCII) == "WEBP" -> "webp"
+        else -> "png"
+    }
+
+    fun mimeFor(file: File): String = when (file.extension.lowercase()) {
+        "jpg", "jpeg" -> "image/jpeg"
+        "webp" -> "image/webp"
+        else -> "image/png"
+    }
+
     fun saveGenerated(context: Context, bytes: ByteArray): File {
-        val file = File(generatedDir(context), "bild_${System.currentTimeMillis()}.png")
+        val file = File(generatedDir(context), "bild_${System.currentTimeMillis()}.${extensionFor(bytes)}")
         file.writeBytes(bytes)
         return file
     }
 
     /** Speichert ein Bild in der Galerie (Bilder/KI-GenC). */
-    fun saveToGallery(context: Context, file: File, mime: String = "image/png"): Boolean = runCatching {
+    fun saveToGallery(context: Context, file: File, mime: String = mimeFor(file)): Boolean = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, file.name)

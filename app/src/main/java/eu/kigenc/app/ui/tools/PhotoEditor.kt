@@ -26,7 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.RotateRight
+import androidx.compose.material.icons.automirrored.outlined.RotateRight
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -75,6 +75,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import eu.kigenc.app.data.report
 
 enum class PhotoFilter(val label: String) {
     NONE("Original"), VIVID("Lebendig"), WARM("Warm"), COOL("Kühl"), BW("Schwarz-Weiß"), SEPIA("Sepia"), VINTAGE("Vintage")
@@ -154,7 +155,8 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
         val src = BitmapFactory.decodeFile(path) ?: return@withContext null
         val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
         Canvas(out).drawBitmap(src, 0f, 0f, Paint().apply { colorFilter = ColorMatrixColorFilter(buildColorMatrix(adjust)) })
-        val file = File(ImageUtils.generatedDir(app), "foto_${System.currentTimeMillis()}.jpg")
+        // Bearbeitete Fotos nur zwischenspeichern (zum Speichern/Teilen) – nicht in der Studio-Galerie.
+        val file = File(File(app.cacheDir, "share").apply { mkdirs() }, "foto_${System.currentTimeMillis()}.jpg")
         file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         file
     }
@@ -234,7 +236,7 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                 throw e
             } catch (e: Exception) {
                 aiStatus.value = null
-                aiError.value = e.friendlyMessage()
+                aiError.value = e.report("Foto-Editor")
             } finally {
                 busy.value = false
             }
@@ -337,7 +339,7 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                             Icon(Icons.Outlined.AutoFixHigh, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("Auto")
                         }
                         OutlinedButton(onClick = vm::rotate) {
-                            Icon(Icons.Outlined.RotateRight, null, Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Outlined.RotateRight, null, Modifier.size(18.dp))
                         }
                         OutlinedButton(onClick = ::reset) {
                             Icon(Icons.Outlined.Restore, null, Modifier.size(18.dp))

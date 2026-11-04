@@ -3,6 +3,14 @@
 package eu.kigenc.app.ui.settings
 
 import android.os.Build
+import eu.kigenc.app.ui.components.shareText
+import eu.kigenc.app.data.ErrorLog
+import eu.kigenc.app.data.BackupManager
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Backup
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +85,7 @@ import eu.kigenc.app.ui.components.EuFlag
 import eu.kigenc.app.update.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import eu.kigenc.app.data.report
 
 private val DEFAULT_CHAT_MODELS = listOf(
     "mistral-medium-latest", "mistral-large-latest", "mistral-small-latest",
@@ -103,6 +112,23 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     var modelPicker by remember { mutableStateOf<String?>(null) } // "chat" | "code"
     var confirmDelete by remember { mutableStateOf(false) }
     var showImageProvider by remember { mutableStateOf(false) }
+    var showLog by remember { mutableStateOf(false) }
+    var busyBackup by remember { mutableStateOf<String?>(null) }
+
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) scope.launch {
+            busyBackup = "Sicherung wird erstellt …"
+            val result = runCatching { BackupManager.export(context, app.settings, uri) }
+            busyBackup = null
+            Toast.makeText(
+                context,
+                result.fold({ "Sicherung gespeichert ($it Dateien)." }, { "Sicherung fehlgeschlagen: ${it.report("Sicherung")}" }),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+    var pendingImport by remember { mutableStateOf<android.net.Uri?>(null) }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingImport = uri }
 
     LaunchedEffect(Unit) {
         keyInput = app.settings.current().apiKey
@@ -118,7 +144,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 app.settings.setCachedModels(models.map { it.id })
                 keyStatus = true to "Verbunden ✓ – ${models.size} Modelle verfügbar"
             } catch (e: Exception) {
-                keyStatus = false to e.friendlyMessage()
+                keyStatus = false to e.report("Schlüsseltest")
             } finally {
                 testing = false
             }
@@ -277,6 +303,35 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
             item {
                 ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Backup, null) },
+                    headlineContent = { Text("Daten sichern") },
+                    supportingContent = { Text("Chats, Aufgaben, Bilder und Einstellungen als ZIP-Datei (ohne API-Schlüssel)") },
+                    modifier = Modifier.clickable {
+                        exportLauncher.launch("KI-GenC-Sicherung-${java.time.LocalDate.now()}.zip")
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+            item {
+                ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Restore, null) },
+                    headlineContent = { Text("Daten wiederherstellen") },
+                    supportingContent = { Text("Aus einer KI-GenC-Sicherung (ZIP) einlesen") },
+                    modifier = Modifier.clickable { importLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+            item {
+                ListItem(
+                    leadingContent = { Icon(Icons.Outlined.BugReport, null) },
+                    headlineContent = { Text("Fehlerprotokoll") },
+                    supportingContent = { Text("Fehler und Abstürze ansehen und an den Entwickler schicken") },
+                    modifier = Modifier.clickable { showLog = true },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+            item {
+                ListItem(
                     leadingContent = { Icon(Icons.Outlined.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
                     headlineContent = { Text("Alle Unterhaltungen & Bilder löschen", color = MaterialTheme.colorScheme.error) },
                     modifier = Modifier.clickable { confirmDelete = true },
@@ -411,6 +466,73 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     scope.launch { app.settings.setBflKey(bflInput) }
                     showImageProvider = false
                 }) { Text("Speichern") }
+            }
+        )
+    }
+
+    busyBackup?.let { text ->
+        AlertDialog(onDismissRequest = {}, confirmButton = {}, text = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.size(12.dp))
+                Text(text)
+            }
+        })
+    }
+
+    pendingImport?.let { uri ->
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            title = { Text("Sicherung wiederherstellen?") },
+            text = { Text("Vorhandene Chats und Aufgaben mit gleichem Namen werden überschrieben. Danach startet die App neu. API-Schlüssel musst du ggf. neu eintragen.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingImport = null
+                    scope.launch {
+                        busyBackup = "Sicherung wird eingelesen …"
+                        val result = runCatching { BackupManager.import(context, app.settings, uri) }
+                        busyBackup = null
+                        result.onSuccess {
+                            Toast.makeText(context, "$it Dateien wiederhergestellt – die App startet neu.", Toast.LENGTH_LONG).show()
+                            delay(1500)
+                            android.os.Process.killProcess(android.os.Process.myPid())
+                        }.onFailure {
+                            Toast.makeText(context, "Wiederherstellen fehlgeschlagen: ${it.report("Wiederherstellen")}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }) { Text("Wiederherstellen") }
+            },
+            dismissButton = { TextButton(onClick = { pendingImport = null }) { Text("Abbrechen") } }
+        )
+    }
+
+    if (showLog) {
+        var logText by remember { mutableStateOf(ErrorLog.read()) }
+        AlertDialog(
+            onDismissRequest = { showLog = false },
+            title = { Text("Fehlerprotokoll") },
+            text = {
+                Column(
+                    Modifier
+                        .heightIn(max = 460.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        logText.ifBlank { "Keine Fehler protokolliert. 👍" },
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    context.shareText(ErrorLog.header() + logText.takeLast(30_000).ifBlank { "Keine Fehler protokolliert." })
+                }) { Text("Teilen") }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { ErrorLog.clear(); logText = "" }) { Text("Leeren") }
+                    TextButton(onClick = { showLog = false }) { Text("Schließen") }
+                }
             }
         )
     }

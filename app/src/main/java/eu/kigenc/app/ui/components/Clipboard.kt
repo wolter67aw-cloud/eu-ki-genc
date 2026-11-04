@@ -32,7 +32,7 @@ fun Context.shareText(text: String) {
     startActivity(Intent.createChooser(intent, "Teilen").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
-fun Context.shareImage(file: File, mime: String = "image/png") = shareFile(file, mime, "Bild teilen")
+fun Context.shareImage(file: File, mime: String = eu.kigenc.app.data.ImageUtils.mimeFor(file)) = shareFile(file, mime, "Bild teilen")
 
 fun Context.shareFile(file: File, mime: String, title: String = "Teilen") {
     val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
