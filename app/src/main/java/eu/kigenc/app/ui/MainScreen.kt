@@ -30,6 +30,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +59,9 @@ import eu.kigenc.app.ui.tools.ToolsScreen
 import eu.kigenc.app.update.UpdateState
 import kotlinx.coroutines.launch
 
+/** Kennung der aktuellen App-Sitzung – ändert sich, wenn die App neu geöffnet wird. */
+val LocalSessionId = compositionLocalOf { 0 }
+
 enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
     CHAT("Chat", Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble),
     STUDIO("Studio", Icons.Outlined.AutoAwesome, Icons.Filled.AutoAwesome),
@@ -66,6 +72,7 @@ enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: Image
 
 @Composable
 fun MainScreen(
+    sessionId: Int,
     shared: SharedContent?,
     onSharedConsumed: () -> Unit,
     openUpdate: Boolean,
@@ -74,12 +81,15 @@ fun MainScreen(
     val context = LocalContext.current
     val app = context.app
     val scope = rememberCoroutineScope()
+    // Neue Sitzung (App neu geöffnet) → alle Eingaben, Anhänge und Zwischenergebnisse leer.
+    key(sessionId) {
+    CompositionLocalProvider(LocalSessionId provides sessionId) {
     var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
     val stateHolder = rememberSaveableStateHolder()
 
-    val chatVm: ChatViewModel = viewModel(key = "chat") { ChatViewModel(app, ChatMode.CHAT) }
-    val codeVm: ChatViewModel = viewModel(key = "code") { ChatViewModel(app, ChatMode.CODE) }
-    val studioVm: StudioViewModel = viewModel(key = "studio") { StudioViewModel(app) }
+    val chatVm: ChatViewModel = viewModel(key = "chat_$sessionId") { ChatViewModel(app, ChatMode.CHAT) }
+    val codeVm: ChatViewModel = viewModel(key = "code_$sessionId") { ChatViewModel(app, ChatMode.CODE) }
+    val studioVm: StudioViewModel = viewModel(key = "studio_$sessionId") { StudioViewModel(app) }
 
     val updateState by app.updates.state.collectAsStateWithLifecycle()
     var showOnboarding by rememberSaveable { mutableStateOf(false) }
@@ -167,5 +177,7 @@ fun MainScreen(
             onGrantPermission = { context.startActivity(app.updates.installPermissionIntent()) },
             onDismiss = { updateDismissed = true },
         )
+    }
+    }
     }
 }

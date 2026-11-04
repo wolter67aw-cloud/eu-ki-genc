@@ -60,19 +60,20 @@ fun ToolsScreen(modifier: Modifier = Modifier) {
     var current by rememberSaveable { mutableStateOf<Tool?>(null) }
     BackHandler(enabled = current != null) { current = null }
     val app = LocalContext.current.app
+    val session = eu.kigenc.app.ui.LocalSessionId.current
     val back = { current = null }
 
     when (current) {
         null -> ToolsHub(modifier) { current = it }
-        Tool.PHOTO -> PhotoEditorScreen(viewModel(key = "tool_photo") { PhotoEditorViewModel(app) }, back, modifier)
-        Tool.VIDEO_ANALYSIS -> VideoAnalysisScreen(viewModel(key = "tool_video") { VideoAnalysisViewModel(app) }, back, modifier)
-        Tool.VIDEO_CREATE -> SlideshowScreen(viewModel(key = "tool_slideshow") { SlideshowViewModel(app) }, back, modifier)
-        Tool.TRANSCRIBE -> TranscribeScreen(viewModel(key = "tool_transcribe") { TranscribeViewModel(app) }, back, modifier)
-        Tool.DATA -> DataScreen(viewModel(key = "tool_data") { DataViewModel(app) }, back, modifier)
-        Tool.TASKS -> TasksScreen(viewModel(key = "tool_tasks") { TasksViewModel(app) }, back, modifier)
-        Tool.RESEARCH -> ResearchScreen(viewModel(key = "tool_research") { ResearchViewModel(app) }, back, modifier)
+        Tool.PHOTO -> PhotoEditorScreen(viewModel(key = "tool_photo_$session") { PhotoEditorViewModel(app) }, back, modifier)
+        Tool.VIDEO_ANALYSIS -> VideoAnalysisScreen(viewModel(key = "tool_video_$session") { VideoAnalysisViewModel(app) }, back, modifier)
+        Tool.VIDEO_CREATE -> SlideshowScreen(viewModel(key = "tool_slideshow_$session") { SlideshowViewModel(app) }, back, modifier)
+        Tool.TRANSCRIBE -> TranscribeScreen(viewModel(key = "tool_transcribe_$session") { TranscribeViewModel(app) }, back, modifier)
+        Tool.DATA -> DataScreen(viewModel(key = "tool_data_$session") { DataViewModel(app) }, back, modifier)
+        Tool.TASKS -> TasksScreen(viewModel(key = "tool_tasks_$session") { TasksViewModel(app) }, back, modifier)
+        Tool.RESEARCH -> ResearchScreen(viewModel(key = "tool_research_$session") { ResearchViewModel(app) }, back, modifier)
         Tool.RESULTS -> {
-            val vm: ResultsViewModel = viewModel(key = "tool_results") { ResultsViewModel(app) }
+            val vm: ResultsViewModel = viewModel(key = "tool_results_$session") { ResultsViewModel(app) }
             androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }
             ResultsScreen(vm, back, modifier)
         }

@@ -10,6 +10,7 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.IntentCompat
@@ -24,6 +25,10 @@ class MainActivity : ComponentActivity() {
     private var shared by mutableStateOf<SharedContent?>(null)
     private var openUpdate by mutableStateOf(false)
 
+    /** Ändert sich, wenn die App neu geöffnet wird → alle Eingaben werden geleert. */
+    private var sessionId by mutableIntStateOf(0)
+    private val prefs by lazy { getSharedPreferences("app_state", MODE_PRIVATE) }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -31,6 +36,8 @@ class MainActivity : ComponentActivity() {
         )
         super.onCreate(savedInstanceState)
         if (savedInstanceState == null) handleIntent(intent)
+        // Nach längerer Pause (auch wenn Android die App zwischendurch beendet hat) frisch starten.
+        if (savedInstanceState != null && shouldReset()) sessionId = 1
 
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = null)
@@ -49,6 +56,7 @@ class MainActivity : ComponentActivity() {
             KiTheme(dynamicColor = settings?.dynamicColor ?: false) {
                 AppBackground {
                     MainScreen(
+                        sessionId = sessionId,
                         shared = shared,
                         onSharedConsumed = { shared = null },
                         openUpdate = openUpdate,
@@ -57,6 +65,48 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Neue Sitzung, wenn die App vom Nutzer verlassen (Home-Taste/App-Wechsel) und wieder geöffnet wurde
+     * oder länger als 10 Minuten im Hintergrund war. Wechsel zu Kamera, Galerie oder Dateiauswahl zählen nicht.
+     */
+    private fun shouldReset(): Boolean {
+        val lastStop = prefs.getLong("last_stop", 0L)
+        if (lastStop == 0L) return false
+        val leftByUser = prefs.getBoolean("left_by_user", false)
+        return leftByUser || System.currentTimeMillis() - lastStop > RESET_AFTER_MS
+    }
+
+    override fun onStart() {
+        super.onStart()
+        launchingExternal = false
+        if (shouldReset()) sessionId++
+        prefs.edit().putLong("last_stop", 0L).putBoolean("left_by_user", false).apply()
+    }
+
+    /** true, solange die App selbst eine andere App öffnet (Kamera, Galerie, Teilen, Links …). */
+    private var launchingExternal = false
+
+    @Deprecated("Wird nur zum Erkennen eigener App-Wechsel überschrieben")
+    @Suppress("DEPRECATION")
+    override fun startActivityForResult(intent: Intent, requestCode: Int, options: Bundle?) {
+        launchingExternal = true
+        super.startActivityForResult(intent, requestCode, options)
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (launchingExternal) {
+            launchingExternal = false
+            return
+        }
+        prefs.edit().putBoolean("left_by_user", true).apply()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) prefs.edit().putLong("last_stop", System.currentTimeMillis()).apply()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -76,5 +126,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_UPDATE = "open_update"
+        private const val RESET_AFTER_MS = 10 * 60 * 1000L
     }
 }

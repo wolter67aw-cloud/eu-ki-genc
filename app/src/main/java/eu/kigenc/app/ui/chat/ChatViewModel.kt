@@ -41,7 +41,8 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
     private var job: Job? = null
 
     init {
-        viewModelScope.launch { reload(selectFirst = true) }
+        // Beim Öffnen der App immer mit einer leeren Unterhaltung starten (Verlauf bleibt erhalten).
+        viewModelScope.launch { reload(selectFirst = false) }
     }
 
     private suspend fun reload(selectFirst: Boolean = false) {
