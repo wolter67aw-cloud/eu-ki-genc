@@ -52,10 +52,28 @@ object ExternalImageClient {
         throw lastError ?: MistralException(0, "Pollinations hat kein Bild geliefert.")
     }
 
-    /** Black Forest Labs (FLUX, Freiburg) – eigener API-Schlüssel nötig, Abrechnung pro Bild. */
+    /** Black Forest Labs (FLUX) – Bild aus Text erzeugen. Eigener API-Schlüssel, Abrechnung pro Bild. */
     suspend fun blackForestLabs(apiKey: String, prompt: String, width: Int = 1024, height: Int = 1024): ByteArray =
+        bflJob(apiKey, "flux-2-pro", JSONObject().put("prompt", prompt).put("width", width).put("height", height))
+
+    /**
+     * Black Forest Labs FLUX.1 Kontext – bearbeitet das echte Foto (Bild-zu-Bild).
+     * Dadurch bleiben Gesichter und Personen erhalten, statt neu gemalt zu werden.
+     */
+    suspend fun blackForestLabsEdit(apiKey: String, prompt: String, imageBase64: String, aspectRatio: String): ByteArray =
+        bflJob(
+            apiKey, "flux-kontext-pro",
+            JSONObject()
+                .put("prompt", prompt)
+                .put("input_image", imageBase64)
+                .put("aspect_ratio", aspectRatio)
+                .put("output_format", "jpeg")
+                .put("safety_tolerance", 2)
+        )
+
+    private suspend fun bflJob(apiKey: String, endpoint: String, body: JSONObject): ByteArray =
         withContext(Dispatchers.IO) {
-            val start = URL("https://api.bfl.ai/v1/flux-2-pro").openConnection() as HttpURLConnection
+            val start = URL("https://api.bfl.ai/v1/$endpoint").openConnection() as HttpURLConnection
             val job = try {
                 start.requestMethod = "POST"
                 start.connectTimeout = 20_000
@@ -64,19 +82,17 @@ object ExternalImageClient {
                 start.setRequestProperty("x-key", apiKey)
                 start.setRequestProperty("Content-Type", "application/json")
                 start.setRequestProperty("Accept", "application/json")
-                start.outputStream.use {
-                    it.write(JSONObject().put("prompt", prompt).put("width", width).put("height", height).toString().toByteArray())
-                }
+                start.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = start.responseCode
                 if (code == 401 || code == 403) throw MistralException(code, "Black-Forest-Labs-Schlüssel ungültig ($code).")
-                if (code == 402) throw MistralException(code, "Kein Guthaben bei Black Forest Labs (402).")
+                if (code == 402) throw MistralException(code, "Kein Guthaben bei Black Forest Labs (402). Bitte auf bfl.ai aufladen.")
                 if (code !in 200..299) throw MistralException(code, "Black-Forest-Labs-Fehler $code ${errorText(start)}".trim())
                 JSONObject(start.inputStream.bufferedReader().use { it.readText() })
             } finally {
                 start.disconnect()
             }
             val pollingUrl = job.optString("polling_url").ifBlank { "https://api.bfl.ai/v1/get_result?id=${job.optString("id")}" }
-            repeat(90) {
+            repeat(120) {
                 delay(1500)
                 val c = get(pollingUrl, mapOf("x-key" to apiKey, "Accept" to "application/json"), 30_000)
                 val result = try {
@@ -95,7 +111,7 @@ object ExternalImageClient {
                             img.disconnect()
                         }
                     }
-                    "Error", "Failed" -> throw MistralException(0, "Black Forest Labs: Erzeugung fehlgeschlagen.")
+                    "Error", "Failed" -> throw MistralException(0, "Black Forest Labs: Bearbeitung fehlgeschlagen.")
                     "Content Moderated", "Request Moderated" ->
                         throw MistralException(0, "Black Forest Labs hat die Anfrage aus Inhaltsgründen abgelehnt.")
                 }

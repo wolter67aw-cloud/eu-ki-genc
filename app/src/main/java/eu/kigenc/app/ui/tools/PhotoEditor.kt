@@ -189,6 +189,19 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
             busy.value = true
             try {
                 val s = app.settings.current()
+                val bounds = withContext(Dispatchers.IO) {
+                    BitmapFactory.Options().apply { inJustDecodeBounds = true }.also { BitmapFactory.decodeFile(path, it) }
+                }
+                val w = bounds.outWidth
+                val h = bounds.outHeight
+                if (ImageGenerator.canEditFaithfully(s)) {
+                    // Echte Bild-zu-Bild-Bearbeitung: Gesichter bleiben erhalten.
+                    aiStatus.value = "Das Foto wird gesichtstreu bearbeitet (FLUX Kontext) … ca. 10–30 Sekunden"
+                    val b64 = withContext(Dispatchers.IO) { android.util.Base64.encodeToString(File(path).readBytes(), android.util.Base64.NO_WRAP) }
+                    aiImage.value = ImageGenerator.editFaithfully(app, s, b64, w, h, instruction)
+                    aiStatus.value = "Fertig ✓ (${ImageGenerator.lastProvider}) – Gesicht und Person bleiben erhalten."
+                    return@launch
+                }
                 if (!s.hasKey) error("Bitte zuerst deinen Mistral-API-Schlüssel unter „Optionen“ eintragen.")
                 aiStatus.value = "Schritt 1/2: Die KI sieht sich dein Foto an …"
                 val dataUrl = withContext(Dispatchers.IO) { ImageUtils.toDataUrl(path) } ?: error("Foto nicht lesbar.")
@@ -197,20 +210,25 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                     listOf(
                         ApiMessage(
                             "user",
-                            "Beschreibe dieses Foto präzise als Bild-Prompt für einen Bildgenerator: Motiv, Personen " +
-                                "(ohne Namen), Komposition, Perspektive, Farben, Licht, Stimmung. Höchstens 120 Wörter. " +
-                                "Gib nur die Beschreibung aus.",
+                            "Beschreibe dieses Foto sehr präzise als Bild-Prompt für einen Bildgenerator. Bei Personen: " +
+                                "Gesichtsform, Augen, Nase, Mund, Haare, Hautton, ungefähres Alter, Ausdruck, Kleidung und Pose " +
+                                "genau beschreiben (ohne Namen). Außerdem Komposition, Perspektive, Farben, Licht, Hintergrund. " +
+                                "Höchstens 150 Wörter. Gib nur die Beschreibung aus.",
                             imageDataUrl = dataUrl
                         )
                     )
-                ).take(1500)
+                ).take(1800)
                 if (description.isBlank()) error("Die KI konnte das Foto nicht beschreiben.")
                 aiStatus.value = "Schritt 2/2: Das neue Bild wird gemalt … (ca. 10–30 Sekunden)"
-                val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}"
-                val file = ImageGenerator.generate(app, s, prompt).firstOrNull()
-                    ?: error("Mistral hat kein Bild zurückgeschickt. Bitte erneut versuchen.")
+                val prompt = "$description\n\nGewünschte Änderung bzw. Stil: ${instruction.ifBlank { "fotorealistisch, verbesserte Qualität" }}. " +
+                    "Natürliche, unverzerrte Gesichter mit korrekten Proportionen."
+                val (gw, gh) = ImageGenerator.sizeFor(w, h)
+                val file = ImageGenerator.generate(app, s, prompt, gw, gh).firstOrNull()
+                    ?: error("Es wurde kein Bild zurückgeschickt. Bitte erneut versuchen.")
                 aiImage.value = file
-                aiStatus.value = "Fertig ✓ (erzeugt mit ${ImageGenerator.lastProvider}) – das neue Bild siehst du direkt hier darunter und oben."
+                aiStatus.value = "Fertig ✓ (${ImageGenerator.lastProvider}). Hinweis: Das Bild wurde nach einer Beschreibung neu gemalt – " +
+                    "Gesichter können abweichen. Für echte Gesichtstreue unter „Optionen → Bildgenerator“ einen " +
+                    "Black-Forest-Labs-Schlüssel eintragen."
             } catch (e: kotlinx.coroutines.CancellationException) {
                 aiStatus.value = null
                 throw e
@@ -351,7 +369,9 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                 item {
                     Text("KI-Neugestaltung", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Die KI beschreibt dein Foto und erzeugt daraus ein neues Bild im gewünschten Stil.",
+                        "Mit Black-Forest-Labs-Schlüssel (Optionen → Bildgenerator) wird dein echtes Foto bearbeitet – " +
+                            "Gesichter bleiben erhalten. Ohne Schlüssel malt die KI ein neues Bild nach einer Beschreibung, " +
+                            "Gesichter können dann abweichen.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

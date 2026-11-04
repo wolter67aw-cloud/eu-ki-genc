@@ -388,10 +388,16 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                             }
                         }
                     }
-                    if (settings.imageProvider == AppSettings.IMAGE_BFL) {
+                    Text(
+                        "Gesichtstreue Fotobearbeitung: Mit einem Black-Forest-Labs-Schlüssel bearbeitet die App dein echtes " +
+                            "Foto (FLUX Kontext), Gesichter bleiben erhalten – egal welcher Generator oben gewählt ist.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                    run {
                         OutlinedTextField(
                             value = bflInput, onValueChange = { bflInput = it },
-                            label = { Text("Black-Forest-Labs-Schlüssel") },
+                            label = { Text("Black-Forest-Labs-Schlüssel (optional)") },
                             singleLine = true,
                             visualTransformation = PasswordVisualTransformation(),
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
@@ -402,9 +408,9 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (settings.imageProvider == AppSettings.IMAGE_BFL) scope.launch { app.settings.setBflKey(bflInput) }
+                    scope.launch { app.settings.setBflKey(bflInput) }
                     showImageProvider = false
-                }) { Text("Fertig") }
+                }) { Text("Speichern") }
             }
         )
     }

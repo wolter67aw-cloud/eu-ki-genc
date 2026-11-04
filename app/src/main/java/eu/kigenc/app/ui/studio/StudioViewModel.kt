@@ -296,21 +296,33 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
             _state.update { it.copy(imageBusy = true, error = null) }
             try {
                 val reference = _state.value.imageReference
+                if (reference != null && reference.kind == AttachmentKind.PHOTO && reference.images.isNotEmpty() &&
+                    ImageGenerator.canEditFaithfully(s)
+                ) {
+                    // Echtes Foto gesichtstreu bearbeiten statt neu malen.
+                    val thumb = reference.thumbnail
+                    val b64 = reference.images.first().substringAfter("base64,")
+                    val file = ImageGenerator.editFaithfully(app, s, b64, thumb?.width ?: 1, thumb?.height ?: 1, prompt)
+                    _state.update { it.copy(images = listOf(GeneratedImageItem(file, prompt.trim(), "")) + it.images) }
+                    return@launch
+                }
                 val finalPrompt = if (reference != null && reference.images.isNotEmpty()) {
                     val description = app.mistral.complete(
                         s.apiKey, s.chatModel,
                         listOf(
                             ApiMessage(
                                 "user",
-                                "Beschreibe dieses Bild präzise als Bild-Prompt (Motiv, Komposition, Perspektive, Farben, " +
-                                    "Licht, Stil). Gib nur die Beschreibung aus.",
+                                "Beschreibe dieses Bild präzise als Bild-Prompt (Motiv, bei Personen Gesicht, Haare, Hautton, " +
+                                    "Alter, Ausdruck und Pose genau; Komposition, Perspektive, Farben, Licht, Stil). " +
+                                    "Gib nur die Beschreibung aus.",
                                 extraImages = reference.images.take(3)
                             )
                         )
                     )
-                    "Vorlage: $description\n\nWunsch/Änderung: ${prompt.trim()}"
+                    "Vorlage: $description\n\nWunsch/Änderung: ${prompt.trim()}. Natürliche, unverzerrte Gesichter mit korrekten Proportionen."
                 } else prompt.trim()
-                val files = ImageGenerator.generate(app, s, finalPrompt)
+                val (gw, gh) = reference?.thumbnail?.let { ImageGenerator.sizeFor(it.width, it.height) } ?: (1024 to 1024)
+                val files = ImageGenerator.generate(app, s, finalPrompt, gw, gh)
                 val items = files.map { GeneratedImageItem(it, prompt.trim(), "") }
                 _state.update { it.copy(images = items + it.images) }
             } catch (e: CancellationException) {

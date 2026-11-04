@@ -7,6 +7,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 /**
  * Gemeinsame Bildgenerierung (Studio, Foto-Editor) mit wählbarem Anbieter:
@@ -47,13 +48,52 @@ object ImageGenerator {
         return images.map { it.bytes }
     }
 
-    suspend fun generate(app: KiApp, s: AppSettings, prompt: String): List<File> {
+    /** true, wenn gesichtstreue Bearbeitung (FLUX Kontext) möglich ist. */
+    fun canEditFaithfully(s: AppSettings) = s.bflKey.isNotBlank()
+
+    /**
+     * Bearbeitet ein echtes Foto mit FLUX Kontext. Gesicht, Identität und Proportionen bleiben erhalten.
+     * [imageBase64] ist das JPEG als Base64 (ohne „data:“-Präfix).
+     */
+    suspend fun editFaithfully(app: KiApp, s: AppSettings, imageBase64: String, width: Int, height: Int, instruction: String): File {
+        if (!canEditFaithfully(s)) throw MistralException(0, "Für gesichtstreue Bearbeitung bitte unter „Optionen → Bildgenerator“ einen Black-Forest-Labs-Schlüssel eintragen.")
+        val wish = instruction.trim().ifBlank { "Improve the photo quality: better lighting, sharper details, natural colors." }
+        val prompt = "Edit this photo as requested: \"$wish\". " +
+            "Keep the exact same person(s): identical face, facial features, identity, age, skin tone, eye shape, " +
+            "hairstyle, expression, body proportions and pose. Do not distort, beautify or replace any face. " +
+            "Keep the original framing and aspect ratio. Only apply the requested change."
+        val bytes = ExternalImageClient.blackForestLabsEdit(s.bflKey, prompt, imageBase64, aspectRatio(width, height))
+        lastProvider = "FLUX Kontext (gesichtstreu)"
+        return withContext(Dispatchers.IO) { ImageUtils.saveGenerated(app, bytes) }
+    }
+
+    private fun aspectRatio(w: Int, h: Int): String {
+        if (w <= 0 || h <= 0) return "1:1"
+        var r = w.toDouble() / h
+        r = r.coerceIn(0.25, 4.0)
+        // auf kleine ganze Zahlen runden (z. B. 3:4, 16:9)
+        val candidates = listOf(1 to 1, 4 to 3, 3 to 4, 3 to 2, 2 to 3, 16 to 9, 9 to 16, 5 to 4, 4 to 5, 21 to 9, 9 to 21)
+        val best = candidates.minBy { (a, b) -> kotlin.math.abs(a.toDouble() / b - r) }
+        return "${best.first}:${best.second}"
+    }
+
+    /** Bildgröße für Text-zu-Bild passend zum Seitenverhältnis (Vielfache von 64, ca. 1 Megapixel). */
+    fun sizeFor(width: Int, height: Int): Pair<Int, Int> {
+        if (width <= 0 || height <= 0) return 1024 to 1024
+        val r = (width.toDouble() / height).coerceIn(0.25, 4.0)
+        val h = kotlin.math.sqrt(1024.0 * 1024.0 / r)
+        val w = h * r
+        fun round64(v: Double) = ((v / 64).roundToInt() * 64).coerceIn(256, 2048)
+        return round64(w) to round64(h)
+    }
+
+    suspend fun generate(app: KiApp, s: AppSettings, prompt: String, width: Int = 1024, height: Int = 1024): List<File> {
         val bytes: List<ByteArray> = when (s.imageProvider) {
             AppSettings.IMAGE_MISTRAL -> mistral(app, s, prompt).also { lastProvider = "Mistral" }
-            AppSettings.IMAGE_POLLINATIONS -> listOf(ExternalImageClient.pollinations(prompt)).also { lastProvider = "Pollinations" }
+            AppSettings.IMAGE_POLLINATIONS -> listOf(ExternalImageClient.pollinations(prompt, width, height)).also { lastProvider = "Pollinations" }
             AppSettings.IMAGE_BFL -> {
                 if (s.bflKey.isBlank()) throw MistralException(0, "Bitte unter „Optionen → Bildgenerator“ deinen Black-Forest-Labs-Schlüssel eintragen.")
-                listOf(ExternalImageClient.blackForestLabs(s.bflKey, prompt)).also { lastProvider = "Black Forest Labs" }
+                listOf(ExternalImageClient.blackForestLabs(s.bflKey, prompt, width, height)).also { lastProvider = "Black Forest Labs" }
             }
             else -> try {
                 mistral(app, s, prompt).also { lastProvider = "Mistral" }
@@ -61,7 +101,7 @@ object ImageGenerator {
                 throw e
             } catch (mistralError: Exception) {
                 try {
-                    listOf(ExternalImageClient.pollinations(prompt)).also { lastProvider = "Pollinations (Ausweich)" }
+                    listOf(ExternalImageClient.pollinations(prompt, width, height)).also { lastProvider = "Pollinations (Ausweich)" }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (fallbackError: Exception) {
