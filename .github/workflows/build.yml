@@ -5,7 +5,7 @@ name: Build & Release
 on:
   push:
     branches: [ main ]
-    paths-ignore: [ '**.md', 'docs/**' ]
+    paths-ignore: [ '**.md', 'docs/**', 'ios/**', '.github/workflows/ios.yml' ]
   workflow_dispatch:
 
 permissions:
