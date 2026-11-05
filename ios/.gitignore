@@ -1,0 +1,5 @@
+KIGenC.xcodeproj/
+KIGenC/Info.plist
+build/
+build.log
+ExportOptions.plist
