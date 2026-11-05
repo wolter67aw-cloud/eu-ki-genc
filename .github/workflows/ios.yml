@@ -5,6 +5,10 @@ on:
     branches: [main, dev]
     paths: ["ios/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: "Mac-Runner (macos-15-intel, macos-latest, macos-26)"
+        default: macos-15-intel
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -12,7 +16,7 @@ concurrency:
 
 jobs:
   ios:
-    runs-on: macos-latest
+    runs-on: ${{ github.event.inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 45
     env:
       ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
