@@ -96,10 +96,12 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: testversion
-          name: KI-GenC Testversion (30 Tage, 12 Personen)
+          # Die Versionsnummer am Ende des Namens nutzt die Testversion für ihre automatischen Updates.
+          name: KI-GenC Testversion 1.0.${{ github.run_number }}
           body: |
             Testversion von KI-GenC – nur mit persönlichem Zugangscode nutzbar, gültig bis 05.12.2026.
-            Installiert sich als eigene App „KI-GenC Test“ neben der normalen Version.
+            Installiert sich als eigene App „KI-GenC Test“ neben der normalen Version und aktualisiert sich
+            während der Testphase automatisch.
           files: KI-GenC-Test.apk
           prerelease: true
           make_latest: false

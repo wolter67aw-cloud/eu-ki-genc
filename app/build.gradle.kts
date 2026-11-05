@@ -1,3 +1,6 @@
+import java.time.LocalDate
+import java.time.ZoneId
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -13,8 +16,8 @@ val keystoreFile = providers.environmentVariable("KEYSTORE_FILE").orNull
 // Optionale E-Mail für Meldungen von KI-Inhalten (Play-Store-Pflicht). In gradle.properties: reportEmail=…
 val reportEmail = providers.gradleProperty("reportEmail").orNull ?: ""
 // Testversion: Ablaufdatum und Prüfsummen der Zugangscodes
-val betaExpiresMillis = java.time.LocalDate.parse(providers.gradleProperty("betaExpires").orNull ?: "2026-12-05")
-    .atTime(23, 59, 59).atZone(java.time.ZoneId.of("Europe/Berlin")).toInstant().toEpochMilli()
+val betaExpiresMillis = LocalDate.parse(providers.gradleProperty("betaExpires").orNull ?: "2026-12-05")
+    .atTime(23, 59, 59).atZone(ZoneId.of("Europe/Berlin")).toInstant().toEpochMilli()
 val betaCodeHashes = providers.gradleProperty("betaCodeHashes").orNull ?: ""
 
 android {
@@ -53,7 +56,8 @@ android {
             dimension = "store"
             applicationIdSuffix = ".test"
             versionNameSuffix = "-test"
-            buildConfigField("boolean", "SELF_UPDATE", "false")
+            // Updates kommen aus dem Vorab-Release „testversion“ auf GitHub
+            buildConfigField("boolean", "SELF_UPDATE", "true")
             buildConfigField("boolean", "BETA", "true")
             buildConfigField("long", "BETA_EXPIRES", "${betaExpiresMillis}L")
             buildConfigField("String", "BETA_CODE_HASHES", "\"$betaCodeHashes\"")

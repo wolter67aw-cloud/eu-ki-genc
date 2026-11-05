@@ -78,7 +78,9 @@ class UpdateManager(private val context: Context) {
     }
 
     private suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
-        val c = URL("https://api.github.com/repos/$repo/releases/latest").openConnection() as HttpURLConnection
+        // Testversion: eigener Update-Kanal (Vorab-Release „testversion“), normale App: neuestes Release
+        val endpoint = if (BuildConfig.BETA) "releases/tags/testversion" else "releases/latest"
+        val c = URL("https://api.github.com/repos/$repo/$endpoint").openConnection() as HttpURLConnection
         c.connectTimeout = 15_000
         c.readTimeout = 20_000
         c.setRequestProperty("Accept", "application/vnd.github+json")
@@ -90,8 +92,9 @@ class UpdateManager(private val context: Context) {
                 !in 200..299 -> error("GitHub antwortet mit ${c.responseCode}")
             }
             val json = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
-            val tag = json.optString("tag_name")
-            val code = Regex("(\\d+)$").find(tag)?.groupValues?.get(1)?.toIntOrNull() ?: return@withContext null
+            // Versionsnummer steht im Tag (v1.0.N) bzw. bei der Testversion im Release-Namen („… 1.0.N“)
+            val tag = if (BuildConfig.BETA) json.optString("name") else json.optString("tag_name")
+            val code = Regex("(\\d+)\\s*$").find(tag.trim())?.groupValues?.get(1)?.toIntOrNull() ?: return@withContext null
             val assets = json.optJSONArray("assets") ?: return@withContext null
             var url: String? = null
             var size = 0L
@@ -100,7 +103,9 @@ class UpdateManager(private val context: Context) {
                 for (i in 0 until assets.length()) {
                     val a = assets.getJSONObject(i)
                     val name = a.optString("name")
-                    val match = if (pass == 0) name == "KI-GenC.apk" else name.endsWith(".apk") && !name.contains("Test", ignoreCase = true)
+                    val wanted = if (BuildConfig.BETA) "KI-GenC-Test.apk" else "KI-GenC.apk"
+                    val match = if (pass == 0) name == wanted
+                    else name.endsWith(".apk") && name.contains("Test", ignoreCase = true) == BuildConfig.BETA
                     if (match) {
                         url = a.optString("browser_download_url")
                         size = a.optLong("size")
@@ -112,7 +117,7 @@ class UpdateManager(private val context: Context) {
             if (url.isNullOrBlank()) return@withContext null
             UpdateInfo(
                 versionCode = code,
-                versionName = tag.removePrefix("v"),
+                versionName = tag.substringAfterLast(' ').removePrefix("v"),
                 apkUrl = url,
                 notes = json.optString("body").trim(),
                 sizeBytes = size,
