@@ -9,6 +9,8 @@ import eu.kigenc.app.data.BackupManager
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Feedback
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Policy
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -228,6 +230,32 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 SettingRow(Icons.Outlined.Palette, "Bildgenerator", imageProviderLabel(settings.imageProvider)) { showImageProvider = true }
             }
 
+            if (eu.kigenc.app.ui.Beta.isBeta) {
+                item { SectionTitle("Testversion") }
+                item {
+                    ListItem(
+                        leadingContent = { Icon(Icons.Outlined.Science, null) },
+                        headlineContent = { Text("Gültig bis ${eu.kigenc.app.ui.Beta.expiryText()}") },
+                        supportingContent = { Text("Noch ${eu.kigenc.app.ui.Beta.daysLeft()} Tage · Code ${eu.kigenc.app.ui.Beta.storedCode(context) ?: "–"}") },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
+                }
+                item {
+                    ListItem(
+                        leadingContent = { Icon(Icons.Outlined.Feedback, null) },
+                        headlineContent = { Text("Feedback senden") },
+                        supportingContent = { Text("Was gefällt dir, was funktioniert nicht?") },
+                        modifier = Modifier.clickable {
+                            // Per WhatsApp, E-Mail usw. an die Person schicken, von der du die Testversion hast.
+                            context.shareText(
+                                "Feedback zu KI-GenC (Testversion ${eu.kigenc.app.BuildConfig.VERSION_NAME}, " +
+                                    "${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE}):\n\n"
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                    )
+                }
+            }
             item { SectionTitle("Darstellung & Sprache") }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {

@@ -15,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.IntentCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import eu.kigenc.app.ui.BetaGate
 import eu.kigenc.app.ui.MainScreen
 import eu.kigenc.app.ui.chat.SharedContent
 import eu.kigenc.app.ui.theme.AppBackground
@@ -55,6 +56,7 @@ class MainActivity : ComponentActivity() {
             }
             KiTheme(dynamicColor = settings?.dynamicColor ?: false) {
                 AppBackground {
+                    BetaGate {
                     MainScreen(
                         sessionId = sessionId,
                         shared = shared,
@@ -62,6 +64,7 @@ class MainActivity : ComponentActivity() {
                         openUpdate = openUpdate,
                         onOpenUpdateHandled = { openUpdate = false },
                     )
+                    }
                 }
             }
         }

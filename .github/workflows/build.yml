@@ -61,12 +61,13 @@ jobs:
           KEY_ALIAS: eukigenc
         run: |
           chmod +x gradlew
-          ./gradlew assembleGithubRelease bundlePlayRelease --stacktrace
+          ./gradlew assembleGithubRelease assembleBetaRelease bundlePlayRelease --stacktrace
 
       - name: APK bereitstellen
         run: |
           cp app/build/outputs/apk/github/release/app-github-release.apk KI-GenC.apk
           cp app/build/outputs/bundle/playRelease/app-play-release.aab KI-GenC-PlayStore.aab
+          cp app/build/outputs/apk/beta/release/app-beta-release.apk KI-GenC-Test.apk
 
       - name: Build-Artefakt hochladen
         uses: actions/upload-artifact@v4
@@ -75,6 +76,7 @@ jobs:
           path: |
             KI-GenC.apk
             KI-GenC-PlayStore.aab
+            KI-GenC-Test.apk
 
       - name: Release veröffentlichen
         if: steps.signing.outputs.signed == 'true' && github.ref == 'refs/heads/main'
@@ -87,3 +89,18 @@ jobs:
             KI-GenC.apk
             KI-GenC-PlayStore.aab
           make_latest: true
+
+      # Testversion separat als Vorab-Release „testversion“ (taucht nicht als „neueste Version“ auf)
+      - name: Testversion veröffentlichen
+        if: steps.signing.outputs.signed == 'true' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: testversion
+          name: KI-GenC Testversion (30 Tage, 12 Personen)
+          body: |
+            Testversion von KI-GenC – nur mit persönlichem Zugangscode nutzbar, gültig bis 05.12.2026.
+            Installiert sich als eigene App „KI-GenC Test“ neben der normalen Version.
+          files: KI-GenC-Test.apk
+          prerelease: true
+          make_latest: false
+          overwrite_files: true

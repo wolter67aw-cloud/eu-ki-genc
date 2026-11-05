@@ -12,6 +12,10 @@ val updateRepo = providers.environmentVariable("GITHUB_REPOSITORY").orNull
 val keystoreFile = providers.environmentVariable("KEYSTORE_FILE").orNull
 // Optionale E-Mail für Meldungen von KI-Inhalten (Play-Store-Pflicht). In gradle.properties: reportEmail=…
 val reportEmail = providers.gradleProperty("reportEmail").orNull ?: ""
+// Testversion: Ablaufdatum und Prüfsummen der Zugangscodes
+val betaExpiresMillis = java.time.LocalDate.parse(providers.gradleProperty("betaExpires").orNull ?: "2026-12-05")
+    .atTime(23, 59, 59).atZone(java.time.ZoneId.of("Europe/Berlin")).toInstant().toEpochMilli()
+val betaCodeHashes = providers.gradleProperty("betaCodeHashes").orNull ?: ""
 
 android {
     namespace = "eu.kigenc.app"
@@ -33,10 +37,26 @@ android {
         create("github") {
             dimension = "store"
             buildConfigField("boolean", "SELF_UPDATE", "true")
+            buildConfigField("boolean", "BETA", "false")
+            buildConfigField("long", "BETA_EXPIRES", "0L")
+            buildConfigField("String", "BETA_CODE_HASHES", "\"\"")
         }
         create("play") {
             dimension = "store"
             buildConfigField("boolean", "SELF_UPDATE", "false")
+            buildConfigField("boolean", "BETA", "false")
+            buildConfigField("long", "BETA_EXPIRES", "0L")
+            buildConfigField("String", "BETA_CODE_HASHES", "\"\"")
+        }
+        // Testversion für 12 Personen, 30 Tage gültig – eigene App neben der normalen Version
+        create("beta") {
+            dimension = "store"
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            buildConfigField("boolean", "SELF_UPDATE", "false")
+            buildConfigField("boolean", "BETA", "true")
+            buildConfigField("long", "BETA_EXPIRES", "${betaExpiresMillis}L")
+            buildConfigField("String", "BETA_CODE_HASHES", "\"$betaCodeHashes\"")
         }
     }
 

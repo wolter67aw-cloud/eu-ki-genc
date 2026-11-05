@@ -95,13 +95,19 @@ class UpdateManager(private val context: Context) {
             val assets = json.optJSONArray("assets") ?: return@withContext null
             var url: String? = null
             var size = 0L
-            for (i in 0 until assets.length()) {
-                val a = assets.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk")) {
-                    url = a.optString("browser_download_url")
-                    size = a.optLong("size")
-                    break
+            // Bevorzugt genau „KI-GenC.apk“ (nicht die Testversion), sonst die erste passende APK.
+            for (pass in 0..1) {
+                for (i in 0 until assets.length()) {
+                    val a = assets.getJSONObject(i)
+                    val name = a.optString("name")
+                    val match = if (pass == 0) name == "KI-GenC.apk" else name.endsWith(".apk") && !name.contains("Test", ignoreCase = true)
+                    if (match) {
+                        url = a.optString("browser_download_url")
+                        size = a.optLong("size")
+                        break
+                    }
                 }
+                if (url != null) break
             }
             if (url.isNullOrBlank()) return@withContext null
             UpdateInfo(
