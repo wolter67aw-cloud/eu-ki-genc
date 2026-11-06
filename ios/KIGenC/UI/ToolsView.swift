@@ -140,7 +140,7 @@ struct PhotoEditorView: View {
                                 ResultActions(text: aiPrompt, image: aiImage, kind: "Foto (KI)")
                                 Spacer()
                                 Button("Weiter bearbeiten") {
-                                    if let ai = aiImage, photos.indices.contains(current) { photos[current] = ai }
+                                    if photos.indices.contains(current) { photos[current] = aiImage }
                                     original = aiImage; reset()
                                 }.font(.callout)
                             }
