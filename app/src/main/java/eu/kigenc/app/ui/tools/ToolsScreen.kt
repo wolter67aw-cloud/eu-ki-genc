@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Insights
+import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PhotoFilter
@@ -45,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import eu.kigenc.app.app
 
 enum class Tool(val title: String, val subtitle: String, val icon: ImageVector, val group: String) {
+    IDEAS("Ideen-Sammlung", "Momentaufnahme, Sprachmemo, Skizze, Zeitkapsel, Ideen kreuzen – mit KI-Schlagwörtern", Icons.Outlined.Lightbulb, "Kreativ"),
     PHOTO("Foto-Editor", "Fotos verbessern, Filter, KI-Neugestaltung", Icons.Outlined.PhotoFilter, "Bild & Medien"),
     VIDEO_ANALYSIS("Video analysieren", "Was passiert im Video? Inkl. Ton", Icons.Outlined.Movie, "Bild & Medien"),
     VIDEO_CREATE("Video erstellen", "Diashow-Video aus deinen Fotos", Icons.Outlined.Slideshow, "Bild & Medien"),
@@ -65,6 +67,11 @@ fun ToolsScreen(modifier: Modifier = Modifier) {
 
     when (current) {
         null -> ToolsHub(modifier) { current = it }
+        Tool.IDEAS -> {
+            val vm: IdeasViewModel = viewModel(key = "tool_ideas_$session") { IdeasViewModel(app) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }
+            IdeasScreen(vm, back, modifier)
+        }
         Tool.PHOTO -> PhotoEditorScreen(viewModel(key = "tool_photo_$session") { PhotoEditorViewModel(app) }, back, modifier)
         Tool.VIDEO_ANALYSIS -> VideoAnalysisScreen(viewModel(key = "tool_video_$session") { VideoAnalysisViewModel(app) }, back, modifier)
         Tool.VIDEO_CREATE -> SlideshowScreen(viewModel(key = "tool_slideshow_$session") { SlideshowViewModel(app) }, back, modifier)

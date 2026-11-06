@@ -16,7 +16,7 @@ import java.util.zip.ZipOutputStream
  * und Einstellungen. API-Schlüssel werden aus Sicherheitsgründen NICHT mitgesichert.
  */
 object BackupManager {
-    private val FOLDERS = listOf("chats", "images", "generated", "results")
+    private val FOLDERS = listOf("chats", "images", "generated", "results", "ideas")
     private val FILES = listOf("tasks.json")
     private const val SETTINGS_ENTRY = "einstellungen.json"
 
