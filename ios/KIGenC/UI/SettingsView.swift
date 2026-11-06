@@ -19,7 +19,11 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField(settings.hasKey ? "•••••••• (gespeichert)" : "Mistral-API-Schlüssel einfügen", text: $keyInput)
+                    if settings.usesTestKey {
+                        Text("✓ Test-Schlüssel aktiv – für die Testversion ist bereits ein Mistral-Schlüssel hinterlegt. Du musst nichts eintragen. Optional kannst du deinen eigenen verwenden.")
+                            .font(.callout).foregroundStyle(Theme.cyan)
+                    }
+                    SecureField(!settings.apiKey.isEmpty ? "•••••••• (gespeichert)" : "Eigenen Mistral-API-Schlüssel einfügen", text: $keyInput)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     HStack {
                         Button("Speichern") { settings.apiKey = keyInput; keyInput = ""; Task { await test() } }
@@ -30,7 +34,7 @@ struct SettingsView: View {
                     }
                     if let testStatus { Text(testStatus).font(.caption).foregroundStyle(testStatus.hasPrefix("✅") ? .green : .orange) }
                     Link("Kostenlosen Schlüssel holen (console.mistral.ai)", destination: URL(string: "https://console.mistral.ai/api-keys")!).font(.callout)
-                    if settings.hasKey { Button("Schlüssel entfernen", role: .destructive) { settings.apiKey = "" } }
+                    if !settings.apiKey.isEmpty { Button("Schlüssel entfernen", role: .destructive) { settings.apiKey = "" } }
                 } header: { Text("Mistral AI") } footer: { Text("Der Schlüssel wird nur im iOS-Schlüsselbund dieses Geräts gespeichert.") }
                 .listRowBackground(Theme.card)
 

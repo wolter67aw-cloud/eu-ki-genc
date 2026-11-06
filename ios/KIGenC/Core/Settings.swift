@@ -63,8 +63,13 @@ final class AppSettings: ObservableObject {
     @Published var cachedModels: [String] { didSet { d.set(cachedModels, forKey: "cached_models") } }
     @Published var onboardingDone: Bool { didSet { d.set(onboardingDone, forKey: "onboarding_done") } }
 
-    var hasKey: Bool { !apiKey.trimmingCharacters(in: .whitespaces).isEmpty }
-    var key: String { apiKey.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var hasKey: Bool { !key.isEmpty }
+    /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
+    var key: String {
+        let own = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? (Beta.sharedKey ?? "") : own
+    }
+    var usesTestKey: Bool { apiKey.trimmingCharacters(in: .whitespaces).isEmpty && Beta.sharedKey != nil }
     var canEditFaithfully: Bool { !bflKey.trimmingCharacters(in: .whitespaces).isEmpty }
 
     private init() {

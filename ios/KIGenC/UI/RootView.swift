@@ -66,7 +66,7 @@ struct OnboardingView: View {
                     }
                     .card()
                 }
-                Text("Zum Start brauchst du einen kostenlosen API-Schlüssel von console.mistral.ai. Er wird unter „Optionen“ eingetragen.")
+                Text(Beta.sharedKey != nil ? "In der Testversion ist bereits ein Mistral-Schlüssel hinterlegt – du kannst sofort loslegen." : "Zum Start brauchst du einen kostenlosen API-Schlüssel von console.mistral.ai. Er wird unter „Optionen“ eingetragen.")
                     .font(.footnote).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.center)
                 GradientButton(title: "Los geht's", icon: "arrow.right", action: done)
             }
@@ -81,6 +81,7 @@ struct OnboardingView: View {
 struct BetaGateView<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var unlocked = Beta.storedCode != nil
+    @State private var keyReady = !Beta.hasSharedKey
     @State private var code = ""
     @State private var error: String?
 
@@ -95,7 +96,20 @@ struct BetaGateView<Content: View>: View {
                     .multilineTextAlignment(.center).foregroundStyle(Theme.secondaryText)
             }
         } else if unlocked {
-            content()
+            if keyReady {
+                content()
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Theme.backgroundGradient.ignoresSafeArea())
+                    .task {
+                        // Test-Schlüssel freischalten, damit Tester keinen eigenen Mistral-Schlüssel brauchen
+                        if let c = Beta.storedCode {
+                            _ = await Task.detached(priority: .userInitiated) { Beta.unlockSharedKey(c) }.value
+                        }
+                        AppSettings.shared.objectWillChange.send()
+                        keyReady = true
+                    }
+            }
         } else {
             gate {
                 Image("Logo").resizable().scaledToFit().frame(width: 100, height: 100)

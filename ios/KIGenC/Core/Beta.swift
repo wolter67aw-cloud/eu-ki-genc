@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import CommonCrypto
 
 /// Testversion: 12 persönliche Zugangscodes, gültig bis einschließlich 05.12.2026.
 enum Beta {
@@ -46,5 +47,32 @@ enum Beta {
 
     static func store(_ code: String) {
         UserDefaults.standard.set(normalize(code), forKey: "beta_code")
+    }
+
+    /// Gemeinsamer Mistral-Schlüssel der Testversion (nur im Arbeitsspeicher).
+    static var sharedKey: String?
+
+    static var hasSharedKey: Bool { isBeta && !BetaHashes.keyBlobs.isEmpty }
+
+    /// Entschlüsselt den Test-Schlüssel mit dem Zugangscode. Ohne gültigen Code nicht lesbar.
+    static func unlockSharedKey(_ code: String) -> String? {
+        if let sharedKey { return sharedKey }
+        guard hasSharedKey else { return nil }
+        let password = Array(normalize(code).utf8).map { Int8(bitPattern: $0) }
+        let salt = Array("kigenc-beta-key-v1".utf8)
+        var derived = [UInt8](repeating: 0, count: 32)
+        let status = CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, password.count, salt, salt.count,
+                                          CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256), 120_000, &derived, derived.count)
+        guard status == kCCSuccess else { return nil }
+        let key = SymmetricKey(data: Data(derived))
+        for blob in BetaHashes.keyBlobs.split(separator: ",") {
+            guard let raw = Data(base64Encoded: String(blob)),
+                  let box = try? AES.GCM.SealedBox(combined: raw),
+                  let plain = try? AES.GCM.open(box, using: key),
+                  let text = String(data: plain, encoding: .utf8) else { continue }
+            sharedKey = text
+            return text
+        }
+        return nil
     }
 }
