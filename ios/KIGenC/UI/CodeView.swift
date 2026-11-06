@@ -1,6 +1,12 @@
 import SwiftUI
 
 struct CodeView: View {
+    var body: some View { NavigationStack { CodeContent() } }
+}
+
+/// Code-Assistent (auch aus Werkzeuge und Start erreichbar).
+struct CodeContent: View {
+    var initialInput = ""
     @EnvironmentObject private var settings: AppSettings
     @State private var mode = "Erstellen"
     @State private var language = "Python"
@@ -15,7 +21,6 @@ struct CodeView: View {
     private let languages = ["Python", "JavaScript", "TypeScript", "Kotlin", "Swift", "Java", "C#", "C++", "Go", "Rust", "PHP", "SQL", "Bash", "PowerShell", "HTML/CSS", "Excel-Formel", "VBA", "Apple Kurzbefehle"]
 
     var body: some View {
-        NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if !settings.hasKey { NeedsKeyView() }
@@ -61,7 +66,7 @@ struct CodeView: View {
             .background(Theme.backgroundGradient.ignoresSafeArea())
             .navigationTitle("Code")
             .navigationBarTitleDisplayMode(.inline)
-        }
+            .onAppear { if input.isEmpty && !initialInput.isEmpty { input = initialInput } }
     }
 
     private func run() {

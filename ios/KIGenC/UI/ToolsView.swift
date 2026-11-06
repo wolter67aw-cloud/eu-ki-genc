@@ -7,6 +7,7 @@ import AVKit
 
 struct ToolsView: View {
     private let tools: [(String, String, String, AnyView)] = [
+        ("Code-Assistent", "chevron.left.forwardslash.chevron.right", "Programme & Automationen", AnyView(CodeContent())),
         ("Ideen-Sammlung", "lightbulb", "Moment, Sprachmemo, Skizze, Zeitkapsel", AnyView(IdeasView())),
         ("Foto-Editor", "slider.horizontal.3", "Filter, Licht, KI-Bearbeitung", AnyView(PhotoEditorView())),
         ("Video", "film", "Analysieren, aufnehmen, Diashow", AnyView(VideoToolView())),
@@ -23,7 +24,7 @@ struct ToolsView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                     ForEach(tools, id: \.0) { title, icon, sub, dest in
                         NavigationLink {
-                            dest.navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+                            dest.navigationTitle(title == "Code-Assistent" ? "Code" : title).navigationBarTitleDisplayMode(.inline)
                                 .background(Theme.backgroundGradient.ignoresSafeArea())
                         } label: {
                             VStack(alignment: .leading, spacing: 8) {

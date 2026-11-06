@@ -2,19 +2,19 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var settings: AppSettings
-    @State private var tab = 0
+    @State private var tab = 5
     @State private var showOnboarding = false
 
     var body: some View {
         TabView(selection: $tab) {
+            StartView(openTab: { tab = $0 })
+                .tabItem { Label("Start", systemImage: "house") }.tag(5)
             ChatView()
                 .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }.tag(0)
             StudioView()
                 .tabItem { Label("Studio", systemImage: "wand.and.stars") }.tag(1)
             ToolsView()
                 .tabItem { Label("Werkzeuge", systemImage: "square.grid.2x2") }.tag(2)
-            CodeView()
-                .tabItem { Label("Code", systemImage: "chevron.left.forwardslash.chevron.right") }.tag(3)
             SettingsView()
                 .tabItem { Label("Optionen", systemImage: "gearshape") }.tag(4)
         }
