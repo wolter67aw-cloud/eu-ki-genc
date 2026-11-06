@@ -6,6 +6,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -36,6 +37,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -63,6 +67,7 @@ import kotlinx.coroutines.launch
 val LocalSessionId = compositionLocalOf { 0 }
 
 enum class Tab(val label: String, val icon: ImageVector, val selectedIcon: ImageVector) {
+    START("Start", Icons.Outlined.Home, Icons.Filled.Home),
     CHAT("Chat", Icons.Outlined.ChatBubbleOutline, Icons.Filled.ChatBubble),
     STUDIO("Studio", Icons.Outlined.AutoAwesome, Icons.Filled.AutoAwesome),
     TOOLS("Werkzeuge", Icons.Outlined.Apps, Icons.Filled.Apps),
@@ -84,12 +89,15 @@ fun MainScreen(
     // Neue Sitzung (App neu geöffnet) → alle Eingaben, Anhänge und Zwischenergebnisse leer.
     key(sessionId) {
     CompositionLocalProvider(LocalSessionId provides sessionId) {
-    var tab by rememberSaveable { mutableStateOf(Tab.CHAT) }
+    var tab by rememberSaveable { mutableStateOf(Tab.START) }
+    // Werkzeug, das von der Startseite aus geöffnet werden soll
+    var toolRequest by remember { mutableStateOf<eu.kigenc.app.ui.tools.Tool?>(null) }
     val stateHolder = rememberSaveableStateHolder()
 
     val chatVm: ChatViewModel = viewModel(key = "chat_$sessionId") { ChatViewModel(app, ChatMode.CHAT) }
     val codeVm: ChatViewModel = viewModel(key = "code_$sessionId") { ChatViewModel(app, ChatMode.CODE) }
     val studioVm: StudioViewModel = viewModel(key = "studio_$sessionId") { StudioViewModel(app) }
+    val startVm: eu.kigenc.app.ui.start.StartViewModel = viewModel(key = "start_$sessionId") { eu.kigenc.app.ui.start.StartViewModel(app) }
 
     val updateState by app.updates.state.collectAsStateWithLifecycle()
     var showOnboarding by rememberSaveable { mutableStateOf(false) }
@@ -132,9 +140,10 @@ fun MainScreen(
         bottomBar = {
             if (!imeVisible) {
                 NavigationBar {
-                    Tab.entries.forEach { t ->
+                    // „Code“ ist über Start und Werkzeuge erreichbar (max. 5 Einträge in der Leiste)
+                    Tab.entries.filter { it != Tab.CODE }.forEach { t ->
                         NavigationBarItem(
-                            selected = tab == t,
+                            selected = tab == t || (t == Tab.TOOLS && tab == Tab.CODE),
                             onClick = { tab = t },
                             icon = { Icon(if (tab == t) t.selectedIcon else t.icon, contentDescription = null) },
                             label = { Text(t.label) }
@@ -149,10 +158,23 @@ fun MainScreen(
             .consumeWindowInsets(padding)
         stateHolder.SaveableStateProvider(tab.name) {
             when (tab) {
+                Tab.START -> eu.kigenc.app.ui.start.StartScreen(
+                    startVm,
+                    onOpenTool = { toolRequest = it; tab = Tab.TOOLS },
+                    modifier = screenModifier,
+                )
                 Tab.CHAT -> ChatScreen(chatVm, screenModifier, shared, onSharedConsumed)
                 Tab.STUDIO -> StudioScreen(studioVm, screenModifier)
-                Tab.TOOLS -> ToolsScreen(screenModifier)
-                Tab.CODE -> ChatScreen(codeVm, screenModifier)
+                Tab.TOOLS -> ToolsScreen(
+                    screenModifier,
+                    request = toolRequest,
+                    onRequestHandled = { toolRequest = null },
+                    onOpenCode = { tab = Tab.CODE },
+                )
+                Tab.CODE -> {
+                    BackHandler { tab = Tab.TOOLS }
+                    ChatScreen(codeVm, screenModifier)
+                }
                 Tab.SETTINGS -> SettingsScreen(screenModifier)
             }
         }

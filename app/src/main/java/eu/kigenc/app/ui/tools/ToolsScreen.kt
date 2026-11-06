@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Insights
 import androidx.compose.material.icons.outlined.Lightbulb
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PhotoFilter
@@ -46,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import eu.kigenc.app.app
 
 enum class Tool(val title: String, val subtitle: String, val icon: ImageVector, val group: String) {
+    CODE("Code-Assistent", "Programme, Skripte und Automationen schreiben und erklären", Icons.Outlined.Code, "Entwicklung"),
     IDEAS("Ideen-Sammlung", "Momentaufnahme, Sprachmemo, Skizze, Zeitkapsel, Ideen kreuzen – mit KI-Schlagwörtern", Icons.Outlined.Lightbulb, "Kreativ"),
     PHOTO("Foto-Editor", "Fotos verbessern, Filter, KI-Neugestaltung", Icons.Outlined.PhotoFilter, "Bild & Medien"),
     VIDEO_ANALYSIS("Video analysieren", "Was passiert im Video? Inkl. Ton", Icons.Outlined.Movie, "Bild & Medien"),
@@ -58,15 +60,36 @@ enum class Tool(val title: String, val subtitle: String, val icon: ImageVector, 
 }
 
 @Composable
-fun ToolsScreen(modifier: Modifier = Modifier) {
+fun ToolsScreen(
+    modifier: Modifier = Modifier,
+    request: Tool? = null,
+    onRequestHandled: () -> Unit = {},
+    onOpenCode: () -> Unit = {},
+) {
     var current by rememberSaveable { mutableStateOf<Tool?>(null) }
+    androidx.compose.runtime.LaunchedEffect(request) {
+        if (request != null) {
+            current = request
+            onRequestHandled()
+        }
+    }
     BackHandler(enabled = current != null) { current = null }
     val app = LocalContext.current.app
     val session = eu.kigenc.app.ui.LocalSessionId.current
     val back = { current = null }
 
     when (current) {
-        null -> ToolsHub(modifier) { current = it }
+        null -> ToolsHub(modifier) {
+            if (it == Tool.CODE) {
+                onOpenCode()
+            } else {
+                current = it
+            }
+        }
+        Tool.CODE -> androidx.compose.runtime.LaunchedEffect(Unit) {
+            current = null
+            onOpenCode()
+        }
         Tool.IDEAS -> {
             val vm: IdeasViewModel = viewModel(key = "tool_ideas_$session") { IdeasViewModel(app) }
             androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }
