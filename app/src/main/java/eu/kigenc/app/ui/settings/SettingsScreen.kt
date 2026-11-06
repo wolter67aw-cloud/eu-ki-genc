@@ -134,7 +134,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> pendingImport = uri }
 
     LaunchedEffect(Unit) {
-        keyInput = app.settings.current().apiKey
+        keyInput = app.settings.current().ownApiKey
         keyLoaded = true
     }
 
@@ -171,6 +171,13 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         .padding(horizontal = 16.dp)
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (settings.usesTestKey) {
+                            Text(
+                                "✓ Test-Schlüssel aktiv – für die Testversion ist bereits ein Mistral-Schlüssel hinterlegt. " +
+                                    "Du musst nichts eintragen. Optional kannst du hier deinen eigenen Schlüssel verwenden.",
+                                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         OutlinedTextField(
                             value = keyInput,
                             onValueChange = { keyInput = it; keyStatus = null },

@@ -19,6 +19,7 @@ val reportEmail = providers.gradleProperty("reportEmail").orNull ?: ""
 val betaExpiresMillis = LocalDate.parse(providers.gradleProperty("betaExpires").orNull ?: "2026-12-05")
     .atTime(23, 59, 59).atZone(ZoneId.of("Europe/Berlin")).toInstant().toEpochMilli()
 val betaCodeHashes = providers.gradleProperty("betaCodeHashes").orNull ?: ""
+val betaKeyBlobs = providers.gradleProperty("betaKeyBlobs").orNull ?: ""
 
 android {
     namespace = "eu.kigenc.app"
@@ -43,6 +44,7 @@ android {
             buildConfigField("boolean", "BETA", "false")
             buildConfigField("long", "BETA_EXPIRES", "0L")
             buildConfigField("String", "BETA_CODE_HASHES", "\"\"")
+            buildConfigField("String", "BETA_KEY_BLOBS", "\"\"")
         }
         create("play") {
             dimension = "store"
@@ -50,6 +52,7 @@ android {
             buildConfigField("boolean", "BETA", "false")
             buildConfigField("long", "BETA_EXPIRES", "0L")
             buildConfigField("String", "BETA_CODE_HASHES", "\"\"")
+            buildConfigField("String", "BETA_KEY_BLOBS", "\"\"")
         }
         // Testversion für 12 Personen, 30 Tage gültig – eigene App neben der normalen Version
         create("beta") {
@@ -61,6 +64,7 @@ android {
             buildConfigField("boolean", "BETA", "true")
             buildConfigField("long", "BETA_EXPIRES", "${betaExpiresMillis}L")
             buildConfigField("String", "BETA_CODE_HASHES", "\"$betaCodeHashes\"")
+            buildConfigField("String", "BETA_KEY_BLOBS", "\"$betaKeyBlobs\"")
         }
     }
 

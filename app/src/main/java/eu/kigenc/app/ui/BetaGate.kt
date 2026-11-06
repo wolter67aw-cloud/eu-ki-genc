@@ -32,7 +32,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import eu.kigenc.app.BuildConfig
 import eu.kigenc.app.R
+import android.util.Base64
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import java.text.DateFormat
 import java.util.Date
 
@@ -63,6 +76,30 @@ object Beta {
     fun store(context: Context, code: String) {
         context.getSharedPreferences("beta", Context.MODE_PRIVATE).edit().putString("code", normalize(code)).apply()
     }
+
+    /** Gemeinsamer Mistral-Schlüssel der Testversion (nur im Arbeitsspeicher, nach Entschlüsselung mit dem Zugangscode). */
+    val sharedKey = MutableStateFlow<String?>(null)
+
+    val hasSharedKey: Boolean get() = isBeta && BuildConfig.BETA_KEY_BLOBS.isNotBlank()
+
+    /** Entschlüsselt den Test-Schlüssel mit dem Zugangscode (PBKDF2 + AES-GCM). Ohne gültigen Code nicht lesbar. */
+    suspend fun unlockSharedKey(code: String): String? = withContext(Dispatchers.Default) {
+        if (!hasSharedKey) return@withContext null
+        sharedKey.value?.let { return@withContext it }
+        val spec = PBEKeySpec(normalize(code).toCharArray(), "kigenc-beta-key-v1".toByteArray(), 120_000, 256)
+        val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
+        val aes = SecretKeySpec(keyBytes, "AES")
+        val key = BuildConfig.BETA_KEY_BLOBS.split(',').firstNotNullOfOrNull { blob ->
+            runCatching {
+                val raw = Base64.decode(blob.trim(), Base64.DEFAULT)
+                val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+                cipher.init(Cipher.DECRYPT_MODE, aes, GCMParameterSpec(128, raw, 0, 12))
+                String(cipher.doFinal(raw, 12, raw.size - 12))
+            }.getOrNull()
+        }
+        sharedKey.value = key
+        key
+    }
 }
 
 /** Zeigt bei der Testversion den Code-Bildschirm bzw. den Ablauf-Hinweis, sonst den Inhalt. */
@@ -81,7 +118,20 @@ fun BetaGate(content: @Composable () -> Unit) {
                 "Deine Rückmeldungen helfen sehr. Die fertige Version erhältst du bald – frag einfach beim Anbieter nach."
         )
         !unlocked -> CodeEntry(onUnlocked = { unlocked = true })
-        else -> content()
+        else -> {
+            // Test-Schlüssel freischalten, damit Tester keinen eigenen Mistral-Schlüssel brauchen
+            val shared by Beta.sharedKey.collectAsState()
+            var tried by remember { mutableStateOf(!Beta.hasSharedKey) }
+            LaunchedEffect(unlocked) {
+                Beta.storedCode(context)?.let { Beta.unlockSharedKey(it) }
+                tried = true
+            }
+            if (shared == null && !tried) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            } else {
+                content()
+            }
+        }
     }
 }
 

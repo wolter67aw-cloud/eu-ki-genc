@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -17,6 +18,8 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 data class AppSettings(
     val apiKey: String = "",
+    /** Selbst eingetragener Schlüssel (leer, wenn der Test-Schlüssel genutzt wird). */
+    val ownApiKey: String = "",
     val chatModel: String = DEFAULT_CHAT_MODEL,
     val codeModel: String = DEFAULT_CODE_MODEL,
     val autoSpeak: Boolean = false,
@@ -28,6 +31,8 @@ data class AppSettings(
     val bflKey: String = "",
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
+    /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
+    val usesTestKey: Boolean get() = ownApiKey.isBlank() && apiKey.isNotBlank()
 
     companion object {
         // "-latest"-Aliase zeigen immer auf die neueste Modellgeneration von Mistral –
@@ -59,9 +64,11 @@ class SettingsRepository(private val context: Context) {
         val BFL_KEY = stringPreferencesKey("bfl_key_enc")
     }
 
-    val settings: Flow<AppSettings> = context.dataStore.data.map { p ->
+    val settings: Flow<AppSettings> = combine(context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey) { p, shared ->
+        val own = p[Keys.API_KEY]?.let { Crypto.decrypt(it) }.orEmpty()
         AppSettings(
-            apiKey = p[Keys.API_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
+            apiKey = own.ifBlank { shared.orEmpty() },
+            ownApiKey = own,
             chatModel = p[Keys.CHAT_MODEL] ?: AppSettings.DEFAULT_CHAT_MODEL,
             codeModel = p[Keys.CODE_MODEL] ?: AppSettings.DEFAULT_CODE_MODEL,
             autoSpeak = p[Keys.AUTO_SPEAK] ?: false,
