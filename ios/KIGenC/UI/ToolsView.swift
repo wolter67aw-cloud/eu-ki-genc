@@ -7,6 +7,7 @@ import AVKit
 
 struct ToolsView: View {
     private let tools: [(String, String, String, AnyView)] = [
+        ("Ideen-Sammlung", "lightbulb", "Moment, Sprachmemo, Skizze, Zeitkapsel", AnyView(IdeasView())),
         ("Foto-Editor", "slider.horizontal.3", "Filter, Licht, KI-Bearbeitung", AnyView(PhotoEditorView())),
         ("Video", "film", "Analysieren, aufnehmen, Diashow", AnyView(VideoToolView())),
         ("Transkription", "waveform", "Audio & Video zu Text", AnyView(TranscribeView())),
