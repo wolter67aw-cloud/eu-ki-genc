@@ -28,7 +28,8 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
     override suspend fun doWork(): Result {
         val app = applicationContext.app
         if (!app.settings.current().autoUpdate) return Result.success()
-        val info = app.updates.check() ?: return Result.success()
+        val info = app.updates.check()
+            ?: return if (app.updates.lastCheckOffline && runAttemptCount < 3) Result.retry() else Result.success()
         // Nur einmal pro neuer Version melden – nicht bei jeder Prüfung erneut
         if (app.updates.shouldNotify(info)) {
             notify(info)

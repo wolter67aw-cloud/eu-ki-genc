@@ -303,7 +303,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { scope.launch { app.updates.check() } },
+                            onClick = { scope.launch { app.updates.check(reportOffline = true) } },
                             enabled = updateState !is UpdateState.Checking && updateState !is UpdateState.Downloading
                         ) { Text("Nach Updates suchen") }
                         (updateState as? UpdateState.Available)?.let { s ->

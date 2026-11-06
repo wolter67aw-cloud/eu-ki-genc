@@ -71,7 +71,7 @@ class UpdateManager(private val context: Context) {
     }
 
     /** Prüft auf ein neues Release. Gibt die Update-Info zurück, falls eine neuere Version existiert. */
-    suspend fun check(userInitiated: Boolean = false): UpdateInfo? {
+    suspend fun check(userInitiated: Boolean = false, reportOffline: Boolean = userInitiated): UpdateInfo? {
         // Ausdrücklich angefordert (z. B. Tipp auf die Mitteilung): Dialog wieder erlauben
         if (userInitiated) prefs.edit().remove(KEY_DISMISSED).apply()
         if (repo.isBlank() || !BuildConfig.SELF_UPDATE) {
@@ -81,7 +81,7 @@ class UpdateManager(private val context: Context) {
         if (_state.value is UpdateState.Downloading || _state.value is UpdateState.Installing) return null
         _state.value = UpdateState.Checking
         return try {
-            val info = fetchLatest()
+            val info = fetchWithRetry()
             if (info != null && info.versionCode > currentVersionCode) {
                 _state.value = UpdateState.Available(info)
                 info
@@ -90,10 +90,49 @@ class UpdateManager(private val context: Context) {
                 null
             }
         } catch (e: Exception) {
-            eu.kigenc.app.data.ErrorLog.log("Update-Prüfung", e)
-            _state.value = UpdateState.Failed("Update-Prüfung fehlgeschlagen: ${e.message ?: e.javaClass.simpleName}")
+            if (isOffline(e)) {
+                // Kein Internet (z. B. Funkloch, Flugmodus, Energiesparen): kein Fehler – später erneut prüfen
+                lastCheckOffline = true
+                _state.value = if (reportOffline) UpdateState.Failed("Keine Internetverbindung – bitte später erneut versuchen.")
+                else UpdateState.Idle
+            } else {
+                eu.kigenc.app.data.ErrorLog.log("Update-Prüfung", e)
+                _state.value = UpdateState.Failed("Update-Prüfung fehlgeschlagen: ${e.message ?: e.javaClass.simpleName}")
+            }
             null
         }
+    }
+
+    /** true, wenn die letzte Prüfung nur an fehlendem Internet scheiterte (der Hintergrund-Job versucht es dann erneut). */
+    var lastCheckOffline = false
+        private set
+
+    private fun isOffline(e: Throwable): Boolean {
+        var t: Throwable? = e
+        while (t != null) {
+            if (t is java.net.UnknownHostException || t is java.net.ConnectException ||
+                t is java.net.SocketTimeoutException || t is java.net.NoRouteToHostException ||
+                t is javax.net.ssl.SSLException
+            ) return true
+            t = t.cause
+        }
+        return false
+    }
+
+    /** Kurze Netzaussetzer (z. B. direkt nach dem Entsperren) abfangen: bis zu 3 Versuche. */
+    private suspend fun fetchWithRetry(): UpdateInfo? {
+        lastCheckOffline = false
+        var last: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                return fetchLatest()
+            } catch (e: Exception) {
+                if (!isOffline(e)) throw e
+                last = e
+                if (attempt < 2) kotlinx.coroutines.delay(4_000L * (attempt + 1))
+            }
+        }
+        throw last!!
     }
 
     private suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
