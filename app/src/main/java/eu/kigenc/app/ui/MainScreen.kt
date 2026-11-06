@@ -122,7 +122,7 @@ fun MainScreen(
         if (openUpdate) {
             updateDismissed = false
             onOpenUpdateHandled()
-            app.updates.check()
+            app.updates.check(userInitiated = true)
         }
     }
 
@@ -165,8 +165,9 @@ fun MainScreen(
         })
     }
 
-    val showUpdateDialog = when (updateState) {
-        is UpdateState.Available -> !updateDismissed
+    val showUpdateDialog = when (val s = updateState) {
+        // Nur fragen, wenn wirklich eine neue, noch nicht abgelehnte Version ansteht
+        is UpdateState.Available -> !updateDismissed && app.updates.shouldPrompt(s.info)
         is UpdateState.Downloading, is UpdateState.Installing, is UpdateState.NeedsPermission -> true
         else -> false
     }
@@ -175,7 +176,10 @@ fun MainScreen(
             state = updateState,
             onInstall = { info -> scope.launch { app.updates.downloadAndInstall(info) } },
             onGrantPermission = { context.startActivity(app.updates.installPermissionIntent()) },
-            onDismiss = { updateDismissed = true },
+            onDismiss = {
+                updateDismissed = true
+                (updateState as? UpdateState.Available)?.let { app.updates.dismiss(it.info) }
+            },
         )
     }
     }

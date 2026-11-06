@@ -5,7 +5,8 @@ name: Build & Release
 on:
   push:
     branches: [ main ]
-    paths-ignore: [ '**.md', 'docs/**', 'ios/**', '.github/workflows/ios.yml' ]
+    # Nur wenn sich die Android-App selbst ändert – sonst gäbe es „Updates“ ohne Neuerungen
+    paths: [ 'app/**', 'gradle/**', '*.gradle.kts', 'gradle.properties', 'signing/**' ]
   workflow_dispatch:
 
 permissions:

@@ -29,7 +29,11 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val app = applicationContext.app
         if (!app.settings.current().autoUpdate) return Result.success()
         val info = app.updates.check() ?: return Result.success()
-        notify(info)
+        // Nur einmal pro neuer Version melden – nicht bei jeder Prüfung erneut
+        if (app.updates.shouldNotify(info)) {
+            notify(info)
+            app.updates.markNotified(info)
+        }
         return Result.success()
     }
 

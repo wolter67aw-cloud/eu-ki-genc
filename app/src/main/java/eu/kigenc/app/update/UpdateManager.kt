@@ -53,8 +53,27 @@ class UpdateManager(private val context: Context) {
     val currentVersionCode: Int get() = BuildConfig.VERSION_CODE
     val currentVersionName: String get() = BuildConfig.VERSION_NAME
 
+    /** Merkt sich, für welche Version schon gefragt bzw. benachrichtigt wurde – so wird nur bei einer wirklich neuen Version gefragt. */
+    private val prefs = context.getSharedPreferences("updates", Context.MODE_PRIVATE)
+
+    /** Dialog nur zeigen, wenn diese Version nicht schon mit „Später“ weggeklickt wurde. */
+    fun shouldPrompt(info: UpdateInfo): Boolean = info.versionCode > prefs.getInt(KEY_DISMISSED, 0)
+
+    fun dismiss(info: UpdateInfo) {
+        prefs.edit().putInt(KEY_DISMISSED, maxOf(info.versionCode, prefs.getInt(KEY_DISMISSED, 0))).apply()
+    }
+
+    /** Hintergrund-Mitteilung nur einmal pro neuer Version. */
+    fun shouldNotify(info: UpdateInfo): Boolean = info.versionCode > prefs.getInt(KEY_NOTIFIED, 0)
+
+    fun markNotified(info: UpdateInfo) {
+        prefs.edit().putInt(KEY_NOTIFIED, info.versionCode).apply()
+    }
+
     /** Prüft auf ein neues Release. Gibt die Update-Info zurück, falls eine neuere Version existiert. */
-    suspend fun check(): UpdateInfo? {
+    suspend fun check(userInitiated: Boolean = false): UpdateInfo? {
+        // Ausdrücklich angefordert (z. B. Tipp auf die Mitteilung): Dialog wieder erlauben
+        if (userInitiated) prefs.edit().remove(KEY_DISMISSED).apply()
         if (repo.isBlank() || !BuildConfig.SELF_UPDATE) {
             _state.value = UpdateState.NotConfigured
             return null
@@ -246,5 +265,10 @@ class UpdateManager(private val context: Context) {
 
     fun reset() {
         _state.value = UpdateState.Idle
+    }
+
+    private companion object {
+        const val KEY_DISMISSED = "dismissed_code"
+        const val KEY_NOTIFIED = "notified_code"
     }
 }
