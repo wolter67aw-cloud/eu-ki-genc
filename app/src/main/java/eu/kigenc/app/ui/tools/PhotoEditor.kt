@@ -21,6 +21,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Switch
+import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
@@ -77,6 +83,19 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import eu.kigenc.app.data.report
 
+private const val MAX_PHOTOS = 10
+
+/** Mehrere Bilder auf einmal teilen. */
+private fun android.content.Context.shareImages(files: List<File>) {
+    if (files.size == 1) { shareImage(files[0], "image/jpeg"); return }
+    val uris = ArrayList(files.map { androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", it) })
+    val intent = android.content.Intent(android.content.Intent.ACTION_SEND_MULTIPLE)
+        .setType("image/jpeg")
+        .putParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, uris)
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    startActivity(android.content.Intent.createChooser(intent, "Fotos teilen").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
 enum class PhotoFilter(val label: String) {
     NONE("Original"), VIVID("Lebendig"), WARM("Warm"), COOL("Kühl"), BW("Schwarz-Weiß"), SEPIA("Sepia"), VINTAGE("Vintage")
 }
@@ -127,18 +146,56 @@ fun buildColorMatrix(a: PhotoAdjust): FloatArray {
 }
 
 class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
+    /** Alle ausgewählten Fotos (Pfade); [source] ist das gerade angezeigte. */
+    val sources = MutableStateFlow<List<String>>(emptyList())
+    val selected = MutableStateFlow(0)
     val source = MutableStateFlow<String?>(null)
+
+    fun select(index: Int) {
+        val list = sources.value
+        if (index !in list.indices) return
+        selected.value = index
+        source.value = list[index]
+        version.value++
+    }
+
+    /** Mehrere Fotos auf einmal hinzufügen (max. 10). */
+    fun loadMany(uris: List<Uri>, replace: Boolean = false) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            val imported = withContext(Dispatchers.IO) {
+                uris.mapNotNull { runCatching { ImageUtils.importImage(app, it) }.getOrNull() }
+            }
+            if (imported.isEmpty()) {
+                message.value = "Bilder konnten nicht geladen werden."
+                return@launch
+            }
+            val base = if (replace) emptyList() else sources.value
+            val all = (base + imported).take(MAX_PHOTOS)
+            if (base.size + imported.size > MAX_PHOTOS) message.value = "Höchstens $MAX_PHOTOS Fotos – die übrigen wurden ignoriert."
+            sources.value = all
+            aiImage.value = null
+            select(if (replace) 0 else (base.size).coerceAtMost(all.lastIndex))
+        }
+    }
+
+    fun remove(index: Int) {
+        val list = sources.value.toMutableList()
+        if (index !in list.indices) return
+        list.removeAt(index)
+        sources.value = list
+        if (list.isEmpty()) {
+            source.value = null
+            selected.value = 0
+        } else {
+            select(selected.value.coerceAtMost(list.lastIndex))
+        }
+    }
     val version = MutableStateFlow(0)
     val aiImage = MutableStateFlow<File?>(null)
     val aiError = MutableStateFlow<String?>(null)
 
-    fun load(uri: Uri) {
-        viewModelScope.launch {
-            runCatching { withContext(Dispatchers.IO) { ImageUtils.importImage(app, uri) } }
-                .onSuccess { source.value = it; aiImage.value = null; version.value++ }
-                .onFailure { message.value = "Bild konnte nicht geladen werden." }
-        }
-    }
+    fun load(uri: Uri) = loadMany(listOf(uri))
 
     fun rotate() {
         val path = source.value ?: return
@@ -150,13 +207,13 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
         }
     }
 
-    private suspend fun render(adjust: PhotoAdjust): File? = withContext(Dispatchers.IO) {
-        val path = source.value ?: return@withContext null
+    private suspend fun render(adjust: PhotoAdjust, path: String? = source.value): File? = withContext(Dispatchers.IO) {
+        if (path == null) return@withContext null
         val src = BitmapFactory.decodeFile(path) ?: return@withContext null
         val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
         Canvas(out).drawBitmap(src, 0f, 0f, Paint().apply { colorFilter = ColorMatrixColorFilter(buildColorMatrix(adjust)) })
         // Bearbeitete Fotos nur zwischenspeichern (zum Speichern/Teilen) – nicht in der Studio-Galerie.
-        val file = File(File(app.cacheDir, "share").apply { mkdirs() }, "foto_${System.currentTimeMillis()}.jpg")
+        val file = File(File(app.cacheDir, "share").apply { mkdirs() }, "foto_${System.nanoTime()}.jpg")
         file.outputStream().use { out.compress(Bitmap.CompressFormat.JPEG, 92, it) }
         file
     }
@@ -169,6 +226,32 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
         }
     }
 
+    /** Gleiche Einstellungen auf alle ausgewählten Fotos anwenden und in der Galerie speichern. */
+    fun saveAll(adjust: PhotoAdjust) {
+        val list = sources.value
+        if (list.isEmpty()) return
+        viewModelScope.launch {
+            busy.value = true
+            var ok = 0
+            try {
+                list.forEach { path ->
+                    val file = render(adjust, path)
+                    if (file != null && withContext(Dispatchers.IO) { ImageUtils.saveToGallery(app, file, "image/jpeg") }) ok++
+                }
+            } finally {
+                busy.value = false
+            }
+            message.value = "$ok von ${list.size} Fotos in der Galerie gespeichert (Bilder/KI-GenC)."
+        }
+    }
+
+    fun shareAll(adjust: PhotoAdjust, onReady: (List<File>) -> Unit) {
+        viewModelScope.launch {
+            val files = sources.value.mapNotNull { render(adjust, it) }
+            if (files.isNotEmpty()) onReady(files)
+        }
+    }
+
     fun share(adjust: PhotoAdjust, onReady: (File) -> Unit) {
         viewModelScope.launch { render(adjust)?.let(onReady) }
     }
@@ -178,8 +261,9 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
     val aiStatus = MutableStateFlow<String?>(null)
     private var remixJob: kotlinx.coroutines.Job? = null
 
-    fun aiRemix(instruction: String) {
+    fun aiRemix(instruction: String, useAll: Boolean = false) {
         val path = source.value
+        val others = if (useAll) sources.value.filterNot { it == path } else emptyList()
         if (path == null) {
             aiError.value = "Bitte zuerst ein Foto auswählen."
             return
@@ -198,22 +282,33 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
                 val h = bounds.outHeight
                 if (ImageGenerator.canEditFaithfully(s)) {
                     // Echte Bild-zu-Bild-Bearbeitung: Gesichter bleiben erhalten.
-                    aiStatus.value = "Das Foto wird gesichtstreu bearbeitet (FLUX Kontext) … ca. 10–30 Sekunden"
-                    val b64 = withContext(Dispatchers.IO) { android.util.Base64.encodeToString(File(path).readBytes(), android.util.Base64.NO_WRAP) }
-                    aiImage.value = ImageGenerator.editFaithfully(app, s, b64, w, h, instruction)
+                    val refs = others.take(3)
+                    aiStatus.value = if (refs.isEmpty()) "Das Foto wird gesichtstreu bearbeitet (FLUX Kontext) … ca. 10–30 Sekunden"
+                    else "${refs.size + 1} Fotos werden gesichtstreu kombiniert (FLUX Kontext) … ca. 20–40 Sekunden"
+                    fun b64(p: String) = android.util.Base64.encodeToString(File(p).readBytes(), android.util.Base64.NO_WRAP)
+                    val main = withContext(Dispatchers.IO) { b64(path) }
+                    val extra = withContext(Dispatchers.IO) { refs.map(::b64) }
+                    val wish = if (refs.isEmpty()) instruction
+                    else "${instruction.ifBlank { "Combine the people and elements of all images naturally into one photo" }}. " +
+                        "Image 1 is the main photo; images 2–${refs.size + 1} are additional references (people, objects, style)."
+                    aiImage.value = ImageGenerator.editFaithfully(app, s, main, w, h, wish, extra)
                     aiStatus.value = "Fertig ✓ (${ImageGenerator.lastProvider}) – Gesicht und Person bleiben erhalten."
                     return@launch
                 }
                 if (!s.hasKey) error("Bitte zuerst deinen Mistral-API-Schlüssel unter „Optionen“ eintragen.")
-                aiStatus.value = "Schritt 1/2: Die KI sieht sich dein Foto an …"
+                aiStatus.value = if (others.isEmpty()) "Schritt 1/2: Die KI sieht sich dein Foto an …"
+                else "Schritt 1/2: Die KI sieht sich ${others.size + 1} Fotos an …"
                 val dataUrl = withContext(Dispatchers.IO) { ImageUtils.toDataUrl(path) } ?: error("Foto nicht lesbar.")
+                val extraUrls = withContext(Dispatchers.IO) { others.take(5).mapNotNull { ImageUtils.toDataUrl(it) } }
                 val description = ImageGenerator.describeImages(
                     app, s,
                     "Beschreibe dieses Foto sehr präzise als Bild-Prompt für einen Bildgenerator. Bei Personen: " +
                         "Gesichtsform, Augen, Nase, Mund, Haare, Hautton, ungefähres Alter, Ausdruck, Kleidung und Pose " +
                         "genau beschreiben (ohne Namen). Außerdem Komposition, Perspektive, Farben, Licht, Hintergrund. " +
+                        (if (extraUrls.isEmpty()) "" else "Es sind mehrere Fotos: Bild 1 ist das Hauptfoto, die weiteren sind Vorlagen – " +
+                            "beschreibe eine Szene, die Personen und Elemente aller Bilder vereint. ") +
                         "Höchstens 150 Wörter. Gib nur die Beschreibung aus.",
-                    listOf(dataUrl)
+                    listOf(dataUrl) + extraUrls
                 )
                 if (description.isBlank()) error("Die KI konnte das Foto nicht beschreiben.")
                 aiStatus.value = "Schritt 2/2: Das neue Bild wird gemalt … (ca. 10–30 Sekunden)"
@@ -243,6 +338,9 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
 fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val source by vm.source.collectAsStateWithLifecycle()
+    val sources by vm.sources.collectAsStateWithLifecycle()
+    val selected by vm.selected.collectAsStateWithLifecycle()
+    var useAll by rememberSaveable { mutableStateOf(true) }
     val version by vm.version.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val aiImage by vm.aiImage.collectAsStateWithLifecycle()
@@ -267,7 +365,7 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     var instruction by rememberSaveable { mutableStateOf("") }
     val adjust = PhotoAdjust(brightness, contrast, saturation, warmth, filter)
 
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> uri?.let(vm::load) }
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)) { uris -> vm.loadMany(uris) }
     fun reset() {
         brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f; filter = PhotoFilter.NONE
     }
@@ -281,7 +379,46 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                 ) {
                     Icon(Icons.Outlined.PhotoLibrary, null)
                     Spacer(Modifier.size(8.dp))
-                    Text(if (source == null) "Foto auswählen" else "Anderes Foto wählen")
+                    Text(if (sources.isEmpty()) "Fotos auswählen (auch mehrere)" else "Weitere Fotos hinzufügen (${sources.size}/$MAX_PHOTOS)")
+                }
+            }
+            if (sources.size > 1) {
+                item {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(sources.size) { i ->
+                            val p = sources[i]
+                            val thumb = remember(p, version) {
+                                BitmapFactory.decodeFile(p, BitmapFactory.Options().apply { inSampleSize = 8 })?.asImageBitmap()
+                            }
+                            Box {
+                                if (thumb != null) {
+                                    Image(
+                                        thumb, "Foto ${i + 1}", contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .size(72.dp)
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .border(
+                                                if (i == selected) 3.dp else 0.dp,
+                                                if (i == selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
+                                                RoundedCornerShape(12.dp)
+                                            )
+                                            .clickable { vm.select(i) }
+                                    )
+                                }
+                                Text(
+                                    "${i + 1}", style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.align(Alignment.BottomStart).padding(4.dp)
+                                        .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 5.dp),
+                                    color = androidx.compose.ui.graphics.Color.White
+                                )
+                                IconButton(onClick = { vm.remove(i) }, modifier = Modifier.align(Alignment.TopEnd).size(26.dp)) {
+                                    Icon(Icons.Outlined.Cancel, "Entfernen", tint = androidx.compose.ui.graphics.Color.White,
+                                        modifier = Modifier.background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             val path = source
@@ -362,6 +499,22 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                         }
                     }
                 }
+                if (sources.size > 1) {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilledTonalButton(onClick = { vm.saveAll(adjust) }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                Text("Alle ${sources.size} speichern")
+                            }
+                            OutlinedButton(onClick = { vm.shareAll(adjust) { context.shareImages(it) } }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                Text("Alle teilen")
+                            }
+                        }
+                        Text(
+                            "Die aktuellen Filter und Regler werden auf alle Fotos angewendet.",
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 item { HorizontalDivider() }
                 item {
                     Text("KI-Neugestaltung", style = MaterialTheme.typography.titleMedium)
@@ -380,8 +533,22 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                         modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
                     )
                 }
+                if (sources.size > 1) {
+                    item {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Alle Fotos einbeziehen", style = MaterialTheme.typography.labelLarge)
+                                Text(
+                                    "Foto ${selected + 1} ist das Hauptbild, die anderen dienen als Vorlage – z. B. „alle Personen zusammen auf ein Gruppenfoto“.",
+                                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(checked = useAll, onCheckedChange = { useAll = it })
+                        }
+                    }
+                }
                 item {
-                    Button(onClick = { vm.aiRemix(instruction) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = { vm.aiRemix(instruction, useAll && sources.size > 1) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(if (busy) "KI gestaltet um …" else "Mit KI neu gestalten")
                     }
                     if (busy) {
