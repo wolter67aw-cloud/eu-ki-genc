@@ -48,7 +48,11 @@ struct ToolsView: View {
 
 struct PhotoEditorView: View {
     @EnvironmentObject private var settings: AppSettings
-    @State private var pick: PhotosPickerItem?
+    @State private var picks: [PhotosPickerItem] = []
+    @State private var photos: [UIImage] = []
+    @State private var current = 0
+    @State private var useAll = true
+    @State private var savedAll = false
     @State private var original: UIImage?
     @State private var edited: UIImage?
     @State private var brightness = 0.0
@@ -66,10 +70,33 @@ struct PhotoEditorView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                PhotosPicker(selection: $pick, matching: .images) {
-                    Label(original == nil ? "Foto auswählen" : "Anderes Foto", systemImage: "photo")
+                PhotosPicker(selection: $picks, maxSelectionCount: max(1, 10 - photos.count), matching: .images) {
+                    Label(photos.isEmpty ? "Fotos auswählen (auch mehrere)" : "Weitere Fotos (\(photos.count)/10)", systemImage: "photo.on.rectangle")
                 }
                 .buttonStyle(.borderedProminent).tint(Theme.blue)
+                .disabled(photos.count >= 10)
+
+                if photos.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(photos.enumerated()), id: \.offset) { i, img in
+                                ZStack(alignment: .topTrailing) {
+                                    Button { select(i) } label: {
+                                        Image(uiImage: img).resizable().scaledToFill().frame(width: 70, height: 70)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(i == current ? Theme.cyan : .clear, lineWidth: 3))
+                                            .overlay(alignment: .bottomLeading) {
+                                                Text("\(i + 1)").font(.caption2.bold()).padding(.horizontal, 5).background(.black.opacity(0.6), in: Capsule()).padding(4)
+                                            }
+                                    }
+                                    Button { removePhoto(i) } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.white, .black.opacity(0.7)) }
+                                        .offset(x: 5, y: -5)
+                                }
+                            }
+                        }
+                        .padding(.top, 5)
+                    }
+                }
 
                 if let edited {
                     Image(uiImage: edited).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 12))
@@ -79,6 +106,12 @@ struct PhotoEditorView: View {
                         slider("Kontrast", $contrast, 0.5...1.8)
                         slider("Sättigung", $saturation, 0...2)
                         ResultActions(text: "", image: edited, kind: "Foto")
+                        if photos.count > 1 {
+                            Button { saveAll() } label: {
+                                Label(savedAll ? "Alle \(photos.count) gespeichert" : "Filter auf alle \(photos.count) anwenden & speichern", systemImage: savedAll ? "checkmark" : "square.and.arrow.down.on.square")
+                            }
+                            .font(.callout).padding(.top, 4)
+                        }
                     }
                     .card()
 
@@ -86,6 +119,15 @@ struct PhotoEditorView: View {
                         Text("KI-Bearbeitung").font(.headline)
                         Text(settings.canEditFaithfully ? "Gesichtstreu mit FLUX Kontext." : "Ohne Black-Forest-Labs-Schlüssel wird ein neues, ähnliches Bild erzeugt (Gesichter können abweichen).")
                             .font(.caption).foregroundStyle(Theme.secondaryText)
+                        if photos.count > 1 {
+                            Toggle(isOn: $useAll) {
+                                VStack(alignment: .leading) {
+                                    Text("Alle Fotos einbeziehen").font(.callout)
+                                    Text("Foto \(current + 1) ist das Hauptbild, die anderen dienen als Vorlage – z. B. „alle Personen auf ein Gruppenfoto“.")
+                                        .font(.caption).foregroundStyle(Theme.secondaryText)
+                                }
+                            }
+                        }
                         TextField("z. B. „Hintergrund als Strand bei Sonnenuntergang“", text: $aiPrompt, axis: .vertical)
                             .lineLimit(2...5).padding(10).background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 10))
                         GradientButton(title: "Neu gestalten", icon: "wand.and.stars", busy: busy) { Task { await aiEdit() } }
@@ -97,7 +139,10 @@ struct PhotoEditorView: View {
                             HStack {
                                 ResultActions(text: aiPrompt, image: aiImage, kind: "Foto (KI)")
                                 Spacer()
-                                Button("Weiter bearbeiten") { original = aiImage; reset() }.font(.callout)
+                                Button("Weiter bearbeiten") {
+                                    if let ai = aiImage, photos.indices.contains(current) { photos[current] = ai }
+                                    original = aiImage; reset()
+                                }.font(.callout)
                             }
                         }
                     }
@@ -109,12 +154,17 @@ struct PhotoEditorView: View {
             }
             .padding()
         }
-        .onChange(of: pick) { _, item in
+        .onChange(of: picks) { _, items in
+            guard !items.isEmpty else { return }
             Task {
-                if let d = try? await item?.loadTransferable(type: Data.self), let img = UIImage(data: d) {
-                    original = img.scaled(maxSide: 2048)
-                    reset()
+                let start = photos.count
+                for item in items where photos.count < 10 {
+                    if let d = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: d) {
+                        photos.append(img.scaled(maxSide: 2048))
+                    }
                 }
+                picks = []
+                if photos.count > start { select(start) }
             }
         }
         .onChange(of: brightness) { _, _ in apply() }
@@ -130,13 +180,40 @@ struct PhotoEditorView: View {
         }
     }
 
+    private func select(_ i: Int) {
+        guard photos.indices.contains(i) else { return }
+        current = i
+        original = photos[i]
+        aiImage = nil
+        apply()
+        if edited == nil { edited = original }
+    }
+
+    private func removePhoto(_ i: Int) {
+        guard photos.indices.contains(i) else { return }
+        photos.remove(at: i)
+        if photos.isEmpty { original = nil; edited = nil; current = 0; return }
+        select(min(current, photos.count - 1))
+    }
+
+    private func saveAll() {
+        for img in photos { UIImageWriteToSavedPhotosAlbum(render(img) ?? img, nil, nil, nil) }
+        savedAll = true
+    }
+
     private func reset() {
         brightness = 0; contrast = 1; saturation = 1; preset = "Original"
         edited = original
     }
 
     private func apply() {
-        guard let original, let cg = original.cgImage else { return }
+        guard let original, let out = render(original) else { return }
+        edited = out
+    }
+
+    /// Wendet die aktuellen Filter und Regler auf ein Bild an.
+    private func render(_ original: UIImage) -> UIImage? {
+        guard let cg = original.cgImage else { return nil }
         var img = CIImage(cgImage: cg)
         let controls = CIFilter.colorControls()
         controls.inputImage = img
@@ -154,26 +231,30 @@ struct PhotoEditorView: View {
         case "Noir": let f = CIFilter.photoEffectNoir(); f.inputImage = img; img = f.outputImage ?? img
         default: break
         }
-        if let out = context.createCGImage(img, from: img.extent) {
-            edited = UIImage(cgImage: out, scale: original.scale, orientation: original.imageOrientation)
-        }
+        guard let out = context.createCGImage(img, from: img.extent) else { return nil }
+        return UIImage(cgImage: out, scale: original.scale, orientation: original.imageOrientation)
     }
 
     @MainActor
     private func aiEdit() async {
         guard let source = edited ?? original else { return }
+        let others = (useAll && photos.count > 1) ? photos.enumerated().filter { $0.offset != current }.map(\.element) : []
         busy = true; error = nil; aiImage = nil
         defer { busy = false }
         do {
             if settings.canEditFaithfully {
                 step = "Bearbeite gesichtstreu …"
-                aiImage = UIImage(data: try await ImageService.editFaithfully(key: settings.bflKey, instruction: aiPrompt, images: [source]))
+                let instruction = others.isEmpty ? aiPrompt
+                    : "\(aiPrompt.isEmpty ? "Combine the people and elements of all images naturally into one photo" : aiPrompt). Image 1 is the main photo; the other images are references (people, objects, style)."
+                aiImage = UIImage(data: try await ImageService.editFaithfully(key: settings.bflKey, instruction: instruction, images: [source] + others))
             } else {
                 guard settings.hasKey else { throw APIError(code: 401, message: "Bitte den Mistral-Schlüssel in den Optionen eintragen.") }
                 step = "Analysiere Foto …"
                 let desc = try await MistralClient.shared.describe(key: settings.key, preferredModel: "mistral-small-latest",
-                    instruction: "Describe this photo precisely in English as an image prompt (people, faces, clothing, scene, light, colors, camera angle). Max 120 words, description only.",
-                    images: [source.dataURL].compactMap { $0 })
+                    instruction: others.isEmpty
+                        ? "Describe this photo precisely in English as an image prompt (people, faces, clothing, scene, light, colors, camera angle). Max 120 words, description only."
+                        : "These are several photos: image 1 is the main photo, the others are references. Describe in English, as one image prompt, a single scene that combines the people and elements of all images (faces, clothing, setting, light, colors). Max 150 words, description only.",
+                    images: ([source] + others.prefix(5)).compactMap { $0.dataURL })
                 step = "Erzeuge neues Bild …"
                 let (data, _) = try await ImageService.generate(prompt: "\(desc). Change: \(aiPrompt)", aspect: source.size.width / max(1, source.size.height), settings: settings)
                 aiImage = UIImage(data: data)
