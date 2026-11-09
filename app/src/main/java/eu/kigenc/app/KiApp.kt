@@ -42,6 +42,7 @@ class KiApp : Application() {
         getSystemService(NotificationManager::class.java).createNotificationChannels(listOf(channel, reminders))
 
         UpdateWorker.schedule(this)
+        eu.kigenc.app.update.MaintenanceWorker.schedule(this)
     }
 
     companion object {

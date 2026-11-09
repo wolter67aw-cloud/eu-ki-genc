@@ -24,6 +24,8 @@ data class AppSettings(
     val codeModel: String = DEFAULT_CODE_MODEL,
     val autoSpeak: Boolean = false,
     val autoUpdate: Boolean = true,
+    /** Neue Versionen im Hintergrund selbst installieren (sonst nur Hinweis). */
+    val autoInstall: Boolean = true,
     val dynamicColor: Boolean = false,
     val imageAgentId: String? = null,
     val cachedModels: List<String> = emptyList(),
@@ -57,6 +59,7 @@ class SettingsRepository(private val context: Context) {
         val CODE_MODEL = stringPreferencesKey("code_model")
         val AUTO_SPEAK = booleanPreferencesKey("auto_speak")
         val AUTO_UPDATE = booleanPreferencesKey("auto_update")
+        val AUTO_INSTALL = booleanPreferencesKey("auto_install")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val IMAGE_AGENT = stringPreferencesKey("image_agent_id")
         val MODELS = stringPreferencesKey("cached_models")
@@ -73,6 +76,7 @@ class SettingsRepository(private val context: Context) {
             codeModel = p[Keys.CODE_MODEL] ?: AppSettings.DEFAULT_CODE_MODEL,
             autoSpeak = p[Keys.AUTO_SPEAK] ?: false,
             autoUpdate = p[Keys.AUTO_UPDATE] ?: true,
+            autoInstall = p[Keys.AUTO_INSTALL] ?: true,
             dynamicColor = p[Keys.DYNAMIC_COLOR] ?: false,
             imageAgentId = p[Keys.IMAGE_AGENT],
             cachedModels = p[Keys.MODELS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
@@ -94,6 +98,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCodeModel(model: String) = context.dataStore.edit { it[Keys.CODE_MODEL] = model }
     suspend fun setAutoSpeak(v: Boolean) = context.dataStore.edit { it[Keys.AUTO_SPEAK] = v }
     suspend fun setAutoUpdate(v: Boolean) = context.dataStore.edit { it[Keys.AUTO_UPDATE] = v }
+    suspend fun setAutoInstall(v: Boolean) = context.dataStore.edit { it[Keys.AUTO_INSTALL] = v }
     suspend fun setDynamicColor(v: Boolean) = context.dataStore.edit { it[Keys.DYNAMIC_COLOR] = v }
 
     suspend fun setImageAgentId(id: String?) = context.dataStore.edit {

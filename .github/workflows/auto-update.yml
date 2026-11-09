@@ -1,0 +1,51 @@
+name: Automatische Updates
+
+# Prüft jeden Pull-Request von Dependabot (neue Bibliotheks-/Werkzeug-Versionen):
+# 1. App testweise bauen (alle Varianten),
+# 2. bei Erfolg automatisch zusammenführen,
+# 3. danach den Release-Build starten → die App aktualisiert sich auf allen Geräten selbst.
+# Schlägt der Test-Build fehl, bleibt der Pull-Request offen (nichts geht kaputt).
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  pruefen-und-zusammenfuehren:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Test-Build mit den neuen Versionen
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleGithubRelease assembleBetaRelease bundlePlayRelease --stacktrace
+
+      - name: Zusammenführen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/pulls/$PR/merge" -f merge_method=squash \
+            -f commit_title="Automatisches Update: ${{ github.event.pull_request.title }}"
+
+      - name: Neue App-Version veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Zusammenführen mit dem Workflow-Token löst keinen Push-Build aus – daher direkt starten
+          gh workflow run build.yml --ref main -R "${{ github.repository }}"

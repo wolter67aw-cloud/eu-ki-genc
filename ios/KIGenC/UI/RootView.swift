@@ -31,10 +31,28 @@ struct RootView: View {
             UINavigationBar.appearance().standardAppearance = nav
             UINavigationBar.appearance().scrollEdgeAppearance = nav
             if !settings.onboardingDone { showOnboarding = true }
+            refreshModelsIfNeeded()
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { settings.onboardingDone = true; showOnboarding = false; if !settings.hasKey { tab = 4 } }
                 .interactiveDismissDisabled()
+        }
+    }
+}
+
+extension RootView {
+    /// Hält die KI-Modelle aktuell: lädt einmal pro Woche die Mistral-Modellliste neu und
+    /// stellt auf das Standardmodell um, falls ein gewähltes Modell abgeschaltet wurde.
+    func refreshModelsIfNeeded() {
+        let own = settings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let last = UserDefaults.standard.double(forKey: "models_refreshed_at")
+        guard !own.isEmpty, Date().timeIntervalSince1970 - last > 7 * 86_400 else { return }
+        Task {
+            guard let models = try? await MistralClient.shared.listModels(key: own), !models.isEmpty else { return }
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "models_refreshed_at")
+            settings.cachedModels = models
+            if !models.contains(settings.chatModel) { settings.chatModel = "mistral-small-latest" }
+            if !models.contains(settings.codeModel) { settings.codeModel = "codestral-latest" }
         }
     }
 }

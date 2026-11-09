@@ -1,18 +1,18 @@
-# Hält Bibliotheken und Build-Werkzeuge automatisch aktuell:
-# Dependabot öffnet wöchentlich Pull-Requests mit neuen Versionen.
-# Nach dem Zusammenführen baut GitHub Actions eine neue APK – die App aktualisiert sich dann selbst.
+# Hält Bibliotheken und Build-Werkzeuge (Kotlin, Compose, Android-Gradle-Plugin, Gradle) automatisch aktuell.
+# GitHub-Aktionen sind über ihre Hauptversion (z. B. @v7) eingebunden und erhalten Fehlerkorrekturen von selbst.
+# Dependabot sammelt jede Woche alle neuen Versionen in EINEM Pull-Request.
+# Der Workflow „Automatische Updates“ baut ihn testweise und führt ihn bei Erfolg selbst zusammen –
+# danach entsteht automatisch eine neue App-Version, die sich auf den Geräten selbst installiert.
 version: 2
 updates:
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: "monday"
+      time: "04:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
     groups:
-      androidx:
-        patterns: [ "androidx.*" ]
-      kotlin:
-        patterns: [ "org.jetbrains.kotlin*", "org.jetbrains.kotlinx*" ]
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "monthly"
+      alle-bibliotheken:
+        patterns: [ "*" ]

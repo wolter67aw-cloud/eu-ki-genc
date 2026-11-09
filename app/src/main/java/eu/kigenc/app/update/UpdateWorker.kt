@@ -30,12 +30,24 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         if (!app.settings.current().autoUpdate) return Result.success()
         val info = app.updates.check()
             ?: return if (app.updates.lastCheckOffline && runAttemptCount < 3) Result.retry() else Result.success()
-        // Nur einmal pro neuer Version melden – nicht bei jeder Prüfung erneut
+        // Vollautomatisch: im Hintergrund herunterladen und installieren, solange die App nicht offen ist
+        val s = app.settings.current()
+        if (s.autoInstall && !isAppInForeground() && app.updates.canInstall()) {
+            app.updates.downloadAndInstall(info)
+            if (app.updates.state.value !is UpdateState.Failed) return Result.success()
+        }
+        // Sonst (oder wenn das nicht klappte): einmal pro neuer Version melden
         if (app.updates.shouldNotify(info)) {
             notify(info)
             app.updates.markNotified(info)
         }
         return Result.success()
+    }
+
+    private fun isAppInForeground(): Boolean {
+        val info = android.app.ActivityManager.RunningAppProcessInfo()
+        android.app.ActivityManager.getMyMemoryState(info)
+        return info.importance <= android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_VISIBLE
     }
 
     private fun notify(info: UpdateInfo) {

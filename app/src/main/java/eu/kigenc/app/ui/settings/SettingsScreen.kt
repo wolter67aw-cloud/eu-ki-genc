@@ -283,6 +283,15 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     scope.launch { app.settings.setAutoUpdate(it) }
                 }
             }
+            if (settings.autoUpdate) {
+                item {
+                    SwitchRow(
+                        Icons.Outlined.SystemUpdate, "Im Hintergrund installieren",
+                        "Neue Versionen werden installiert, während du die App nicht nutzt – ohne Nachfrage, soweit Android es erlaubt",
+                        settings.autoInstall
+                    ) { scope.launch { app.settings.setAutoInstall(it) } }
+                }
+            }
             item {
                 Column(Modifier.padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
