@@ -306,8 +306,10 @@ fun MarkdownText(
 @Composable
 fun CodeBlock(language: String, code: String, onCopy: (String) -> Unit) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.medium,
+        // Code immer im dunklen Editor-Stil – so bleibt die Syntax-Färbung in jedem Design gut lesbar
+        color = Color(0xFF111622),
+        contentColor = Color(0xFFE6EAF5),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -335,7 +337,7 @@ fun CodeBlock(language: String, code: String, onCopy: (String) -> Unit) {
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
                 softWrap = false,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = Color(0xFFE6EAF5),
                 modifier = Modifier
                     .horizontalScroll(rememberScrollState())
                     .padding(12.dp)

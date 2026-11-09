@@ -43,6 +43,7 @@ object BackupManager {
                     .put("autoSpeak", s.autoSpeak)
                     .put("autoUpdate", s.autoUpdate)
                     .put("dynamicColor", s.dynamicColor)
+                    .put("design", s.design)
                     .put("imageProvider", s.imageProvider)
                 zip.putNextEntry(ZipEntry(SETTINGS_ENTRY))
                 zip.write(json.toString(2).toByteArray())
@@ -84,6 +85,7 @@ object BackupManager {
                 if (o.has("autoSpeak")) settings.setAutoSpeak(o.getBoolean("autoSpeak"))
                 if (o.has("autoUpdate")) settings.setAutoUpdate(o.getBoolean("autoUpdate"))
                 if (o.has("dynamicColor")) settings.setDynamicColor(o.getBoolean("dynamicColor"))
+                if (o.has("design")) settings.setDesign(o.getString("design"))
                 o.optString("imageProvider").takeIf { it.isNotBlank() }?.let { settings.setImageProvider(it) }
             }
         }

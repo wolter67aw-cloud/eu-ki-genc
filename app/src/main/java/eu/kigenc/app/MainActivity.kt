@@ -43,9 +43,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = null)
             val dynamic = settings?.dynamicColor == true && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-            LaunchedEffect(dynamic) {
+            val lightDesign = !eu.kigenc.app.ui.theme.designById(settings?.design).dark
+            LaunchedEffect(dynamic, lightDesign) {
                 if (dynamic) {
                     enableEdgeToEdge()
+                } else if (lightDesign) {
+                    // Helles Design → dunkle Symbole in Status- und Navigationsleiste.
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+                        navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
+                    )
                 } else {
                     // Logo-Design ist immer dunkel → helle Symbole in Status- und Navigationsleiste.
                     enableEdgeToEdge(
@@ -54,7 +61,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
-            KiTheme(dynamicColor = settings?.dynamicColor ?: false) {
+            KiTheme(dynamicColor = settings?.dynamicColor ?: false, designId = settings?.design) {
                 AppBackground {
                     BetaGate {
                     MainScreen(

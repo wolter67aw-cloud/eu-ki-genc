@@ -27,6 +27,8 @@ data class AppSettings(
     /** Neue Versionen im Hintergrund selbst installieren (sonst nur Hinweis). */
     val autoInstall: Boolean = true,
     val dynamicColor: Boolean = false,
+    /** Gewähltes App-Design (siehe ui/theme/Theme.kt → DESIGNS). */
+    val design: String = "original",
     val imageAgentId: String? = null,
     val cachedModels: List<String> = emptyList(),
     val imageProvider: String = IMAGE_AUTO,
@@ -61,6 +63,7 @@ class SettingsRepository(private val context: Context) {
         val AUTO_UPDATE = booleanPreferencesKey("auto_update")
         val AUTO_INSTALL = booleanPreferencesKey("auto_install")
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
+        val DESIGN = stringPreferencesKey("design")
         val IMAGE_AGENT = stringPreferencesKey("image_agent_id")
         val MODELS = stringPreferencesKey("cached_models")
         val IMAGE_PROVIDER = stringPreferencesKey("image_provider")
@@ -78,6 +81,7 @@ class SettingsRepository(private val context: Context) {
             autoUpdate = p[Keys.AUTO_UPDATE] ?: true,
             autoInstall = p[Keys.AUTO_INSTALL] ?: true,
             dynamicColor = p[Keys.DYNAMIC_COLOR] ?: false,
+            design = p[Keys.DESIGN] ?: "original",
             imageAgentId = p[Keys.IMAGE_AGENT],
             cachedModels = p[Keys.MODELS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
             imageProvider = p[Keys.IMAGE_PROVIDER] ?: AppSettings.IMAGE_AUTO,
@@ -100,6 +104,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoUpdate(v: Boolean) = context.dataStore.edit { it[Keys.AUTO_UPDATE] = v }
     suspend fun setAutoInstall(v: Boolean) = context.dataStore.edit { it[Keys.AUTO_INSTALL] = v }
     suspend fun setDynamicColor(v: Boolean) = context.dataStore.edit { it[Keys.DYNAMIC_COLOR] = v }
+    suspend fun setDesign(id: String) = context.dataStore.edit { it[Keys.DESIGN] = id }
 
     suspend fun setImageAgentId(id: String?) = context.dataStore.edit {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)

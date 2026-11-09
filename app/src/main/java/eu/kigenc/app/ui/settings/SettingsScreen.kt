@@ -263,10 +263,26 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     )
                 }
             }
+            item { SectionTitle("Design") }
+            item {
+                Text(
+                    "Wähle eine Oberfläche – wie die Skins eines Synthesizers. Die Änderung gilt sofort.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                )
+            }
+            item {
+                DesignPicker(settings.design, enabled = !settings.dynamicColor) { d ->
+                    scope.launch {
+                        app.settings.setDesign(d.id)
+                        if (settings.dynamicColor) app.settings.setDynamicColor(false)
+                    }
+                }
+            }
             item { SectionTitle("Darstellung & Sprache") }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {
-                    SwitchRow(Icons.Outlined.Palette, "Material-You-Farben", "Statt der Logo-Farben die Farben deines Hintergrundbilds nutzen", settings.dynamicColor) {
+                    SwitchRow(Icons.Outlined.Palette, "Material-You-Farben", "Statt eines Designs die Farben deines Hintergrundbilds nutzen", settings.dynamicColor) {
                         scope.launch { app.settings.setDynamicColor(it) }
                     }
                 }
