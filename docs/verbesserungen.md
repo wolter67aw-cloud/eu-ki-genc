@@ -26,4 +26,4 @@ Jede Verbesserung bekommt einen Eintrag: Datum, Version, was geändert wurde, wa
 
 ## Logbuch
 - 09.11.2026 (v1.0.48): 9 App-Designs als „Synthesizer-Skins“ mit Live-Vorschau unter Optionen → Design (Original, Neon Synthwave, Analog Vintage, Studio Graphite, Retro Terminal, Sunset Wave, Midnight Gold, Deep Ocean, Arctic Glass hell) – Android & iOS. Wunsch des Nutzers.
-- 09.11.2026 (v1.0.49): 6 weitere Designs mit eigenen Symbolen – GenC Hologramm, Vielfalt, Vegan, Pride, Zweisamkeit, Klassisch (hell) – und wählbares App-Symbol (Android: activity-alias, .MainActivity bleibt Standard; iOS: alternative App-Icons). Wunsch des Nutzers.
+- 09.11.2026 (v1.0.50): 6 weitere Designs mit eigenen Symbolen – GenC Hologramm, Vielfalt, Vegan, Pride, Zweisamkeit, Klassisch (hell) – und wählbares App-Symbol (Android: activity-alias, .MainActivity bleibt Standard; iOS: alternative App-Icons). Wunsch des Nutzers.
