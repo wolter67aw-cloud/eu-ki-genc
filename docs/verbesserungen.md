@@ -25,4 +25,4 @@ Jede Verbesserung bekommt einen Eintrag: Datum, Version, was geändert wurde, wa
 - Barrierefreiheit: größere Schrift, TalkBack/VoiceOver-Beschriftungen prüfen
 
 ## Logbuch
-- 09.11.2026 (v1.0.47): 9 App-Designs als „Synthesizer-Skins“ mit Live-Vorschau unter Optionen → Design (Original, Neon Synthwave, Analog Vintage, Studio Graphite, Retro Terminal, Sunset Wave, Midnight Gold, Deep Ocean, Arctic Glass hell) – Android & iOS. Wunsch des Nutzers.
+- 09.11.2026 (v1.0.48): 9 App-Designs als „Synthesizer-Skins“ mit Live-Vorschau unter Optionen → Design (Original, Neon Synthwave, Analog Vintage, Studio Graphite, Retro Terminal, Sunset Wave, Midnight Gold, Deep Ocean, Arctic Glass hell) – Android & iOS. Wunsch des Nutzers.
