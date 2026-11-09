@@ -30,7 +30,7 @@ struct CodeContent: View {
                                 Button { mode = m } label: {
                                     Text(m).font(.callout).padding(.horizontal, 12).padding(.vertical, 8)
                                         .background(mode == m ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card), in: Capsule())
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle((mode == m) ? Theme.onAccent : Theme.text)
                                 }
                             }
                         }

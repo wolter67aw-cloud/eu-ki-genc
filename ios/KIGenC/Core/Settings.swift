@@ -62,6 +62,8 @@ final class AppSettings: ObservableObject {
     @Published var imageAgentID: String { didSet { d.set(imageAgentID, forKey: "image_agent") } }
     @Published var cachedModels: [String] { didSet { d.set(cachedModels, forKey: "cached_models") } }
     @Published var onboardingDone: Bool { didSet { d.set(onboardingDone, forKey: "onboarding_done") } }
+    /// Gewähltes App-Design (Synthesizer-Skin).
+    @Published var design: String { didSet { d.set(design, forKey: "design"); Theme.current = AppDesign.byID(design) } }
 
     var hasKey: Bool { !key.isEmpty }
     /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
@@ -82,6 +84,7 @@ final class AppSettings: ObservableObject {
         imageAgentID = d.string(forKey: "image_agent") ?? ""
         cachedModels = d.stringArray(forKey: "cached_models") ?? []
         onboardingDone = d.bool(forKey: "onboarding_done")
+        design = d.string(forKey: "design") ?? "original"
     }
 
     static let defaultChatModels = ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "magistral-medium-latest", "ministral-8b-latest"]

@@ -29,7 +29,7 @@ struct ToolsView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 8) {
                                 Image(systemName: icon).font(.title).foregroundStyle(Theme.accentGradient)
-                                Text(title).font(.headline).foregroundStyle(.white)
+                                Text(title).font(.headline).foregroundStyle(Theme.text)
                                 Text(sub).font(.caption).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.leading)
                             }
                             .frame(maxWidth: .infinity, minHeight: 110, alignment: .topLeading)
@@ -746,7 +746,7 @@ struct TasksView: View {
                         Button { store.toggle(t) } label: { Image(systemName: t.done ? "checkmark.circle.fill" : "circle").foregroundStyle(Theme.cyan) }
                             .buttonStyle(.plain)
                         VStack(alignment: .leading) {
-                            Text(t.title).strikethrough(t.done).foregroundStyle(t.done ? Theme.secondaryText : .white)
+                            Text(t.title).strikethrough(t.done).foregroundStyle(t.done ? Theme.secondaryText : Theme.text)
                             if let d = t.due { Text(d.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(d < Date() && !t.done ? .orange : Theme.secondaryText) }
                         }
                     }

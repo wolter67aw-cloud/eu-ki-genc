@@ -116,7 +116,7 @@ struct ChatView: View {
                 Text("Wie kann ich helfen?").font(.title2.bold())
                 ForEach(["Erkläre mir Quantencomputer in einfachen Worten", "Schreibe eine freundliche Absage-E-Mail", "Plane mir eine Woche gesunde Ernährung", "Was ist auf diesem Foto zu sehen?"], id: \.self) { s in
                     Button { model.input = s; focused = true } label: {
-                        Text(s).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(.white)
+                        Text(s).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.text)
                     }
                     .card()
                 }
@@ -196,7 +196,7 @@ struct ChatView: View {
                         showHistory = false
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(c.title).lineLimit(1).foregroundStyle(.white)
+                            Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
                             Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
                         }
                     }
@@ -211,7 +211,7 @@ struct ChatView: View {
                 ToolbarItem(placement: .destructiveAction) { Button("Alle löschen", role: .destructive) { store.clear() }.disabled(store.conversations.isEmpty) }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(Theme.current.dark ? .dark : .light)
     }
 }
 

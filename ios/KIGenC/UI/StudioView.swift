@@ -72,7 +72,7 @@ struct TextStudio: View {
                                 Label(t.title, systemImage: t.icon).font(.callout)
                                     .padding(.horizontal, 12).padding(.vertical, 8)
                                     .background(template == t ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card), in: Capsule())
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle((template == t) ? Theme.onAccent : Theme.text)
                             }
                         }
                     }

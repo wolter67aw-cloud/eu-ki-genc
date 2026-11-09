@@ -120,12 +120,12 @@ struct GradientButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                if busy { ProgressView().tint(.white) } else if let icon { Image(systemName: icon) }
+                if busy { ProgressView().tint(Theme.onAccent) } else if let icon { Image(systemName: icon) }
                 Text(title).bold()
             }
             .frame(maxWidth: .infinity).padding(.vertical, 13)
-            .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: 14))
-            .foregroundStyle(.white)
+            .background(Theme.accentGradient, in: RoundedRectangle(cornerRadius: Theme.corner))
+            .foregroundStyle(Theme.onAccent)
         }
         .disabled(busy)
         .opacity(busy ? 0.75 : 1)

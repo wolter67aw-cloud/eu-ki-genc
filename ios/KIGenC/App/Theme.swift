@@ -1,34 +1,123 @@
 import SwiftUI
 
-/// Farben des KI-GenC-Logos: Nachtblau, Cyan → Blau → Violett.
-enum Theme {
-    static let navy = Color(red: 0 / 255, green: 8 / 255, blue: 27 / 255)
-    static let navyMid = Color(red: 6 / 255, green: 16 / 255, blue: 58 / 255)
-    static let navyPurple = Color(red: 21 / 255, green: 11 / 255, blue: 62 / 255)
-    static let cyan = Color(red: 34 / 255, green: 195 / 255, blue: 245 / 255)
-    static let blue = Color(red: 59 / 255, green: 123 / 255, blue: 242 / 255)
-    static let purple = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
-    static let card = Color(red: 15 / 255, green: 24 / 255, blue: 56 / 255)
-    static let cardHigh = Color(red: 22 / 255, green: 32 / 255, blue: 73 / 255)
-    static let userBubble = Color(red: 26 / 255, green: 60 / 255, blue: 147 / 255)
-    static let secondaryText = Color(red: 169 / 255, green: 179 / 255, blue: 209 / 255)
+extension Color {
+    init(hex: UInt32) {
+        self.init(red: Double((hex >> 16) & 0xFF) / 255, green: Double((hex >> 8) & 0xFF) / 255, blue: Double(hex & 0xFF) / 255)
+    }
+}
 
-    static let backgroundGradient = LinearGradient(colors: [navy, navyMid, navyPurple], startPoint: .top, endPoint: .bottom)
-    static let accentGradient = LinearGradient(colors: [cyan, blue, purple], startPoint: .leading, endPoint: .trailing)
+/// Ein App-Design („Skin“) – wie die austauschbaren Oberflächen von Synthesizer-Plugins.
+struct AppDesign: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let tagline: String
+    let dark: Bool
+    let background: [Color]
+    let primary: Color
+    let secondary: Color
+    let tertiary: Color
+    let surface: Color
+    let surfaceHigh: Color
+    let bubble: Color
+    let text: Color
+    let textMuted: Color
+    let corner: CGFloat
+    var fontDesign: Font.Design = .default
+    /// Textfarbe auf Akzentflächen (hell oder dunkel, je nach Akzent).
+    var onAccent: Color = .white
+
+    static func == (a: AppDesign, b: AppDesign) -> Bool { a.id == b.id }
+
+    static let all: [AppDesign] = [
+        AppDesign(id: "original", name: "KI-GenC Original", tagline: "Nachtblau mit Cyan & Violett", dark: true,
+                  background: [Color(hex: 0x00081B), Color(hex: 0x06103A), Color(hex: 0x150B3E)],
+                  primary: Color(hex: 0x22C3F5), secondary: Color(hex: 0x8B5CF6), tertiary: Color(hex: 0x3B7BF2),
+                  surface: Color(hex: 0x0F1838), surfaceHigh: Color(hex: 0x162049), bubble: Color(hex: 0x1A3C93),
+                  text: Color(hex: 0xE6EAF5), textMuted: Color(hex: 0xA9B3D1), corner: 16),
+        AppDesign(id: "neon", name: "Neon Synthwave", tagline: "Pink- und Cyan-Leuchten auf Tiefviolett", dark: true,
+                  background: [Color(hex: 0x0D0221), Color(hex: 0x1B0B3A), Color(hex: 0x2E0F4F)],
+                  primary: Color(hex: 0xFF2E97), secondary: Color(hex: 0x00F0FF), tertiary: Color(hex: 0xFFD319),
+                  surface: Color(hex: 0x1A0838), surfaceHigh: Color(hex: 0x2A1050), bubble: Color(hex: 0x5A1450),
+                  text: Color(hex: 0xF7E9FF), textMuted: Color(hex: 0xC3A6E0), corner: 14),
+        AppDesign(id: "analog", name: "Analog Vintage", tagline: "Holz, Creme und Bernstein", dark: true,
+                  background: [Color(hex: 0x1E140C), Color(hex: 0x2B1D12), Color(hex: 0x3A2717)],
+                  primary: Color(hex: 0xFF9F1C), secondary: Color(hex: 0xE8D5B5), tertiary: Color(hex: 0xD9541E),
+                  surface: Color(hex: 0x2C1E13), surfaceHigh: Color(hex: 0x3B291A), bubble: Color(hex: 0x6B3A12),
+                  text: Color(hex: 0xF3E6D0), textMuted: Color(hex: 0xC2AE90), corner: 8, fontDesign: .serif, onAccent: Color(hex: 0x1E140C)),
+        AppDesign(id: "graphite", name: "Studio Graphite", tagline: "Metall mit grünen LED-Akzenten", dark: true,
+                  background: [Color(hex: 0x111214), Color(hex: 0x1A1C1F), Color(hex: 0x24272B)],
+                  primary: Color(hex: 0x9EFF3E), secondary: Color(hex: 0x4FD1FF), tertiary: Color(hex: 0xFF5C5C),
+                  surface: Color(hex: 0x1C1E21), surfaceHigh: Color(hex: 0x2A2D31), bubble: Color(hex: 0x2F3A24),
+                  text: Color(hex: 0xE8EAED), textMuted: Color(hex: 0x9AA0A6), corner: 4, onAccent: Color(hex: 0x101214)),
+        AppDesign(id: "terminal", name: "Retro Terminal", tagline: "Phosphor-Grün auf Schwarz", dark: true,
+                  background: [Color(hex: 0x000000), Color(hex: 0x020A04), Color(hex: 0x04140A)],
+                  primary: Color(hex: 0x33FF66), secondary: Color(hex: 0x00CC44), tertiary: Color(hex: 0xFFB000),
+                  surface: Color(hex: 0x041008), surfaceHigh: Color(hex: 0x0A1E10), bubble: Color(hex: 0x0E3A1A),
+                  text: Color(hex: 0xB8FFC8), textMuted: Color(hex: 0x5FAF72), corner: 2, fontDesign: .monospaced, onAccent: .black),
+        AppDesign(id: "sunset", name: "Sunset Wave", tagline: "Violett, Magenta und Orange", dark: true,
+                  background: [Color(hex: 0x1A0B2E), Color(hex: 0x3B0F3A), Color(hex: 0x5A1A2E)],
+                  primary: Color(hex: 0xFF7A45), secondary: Color(hex: 0xFF3D8B), tertiary: Color(hex: 0xFFC857),
+                  surface: Color(hex: 0x2A0E33), surfaceHigh: Color(hex: 0x3A1541), bubble: Color(hex: 0x6A1F45),
+                  text: Color(hex: 0xFFE9E0), textMuted: Color(hex: 0xE0A9B5), corner: 22),
+        AppDesign(id: "gold", name: "Midnight Gold", tagline: "Tiefschwarz mit Gold und Silber", dark: true,
+                  background: [Color(hex: 0x050505), Color(hex: 0x0E0D0A), Color(hex: 0x17140C)],
+                  primary: Color(hex: 0xE5C07B), secondary: Color(hex: 0xC9CCD1), tertiary: Color(hex: 0xB08A3E),
+                  surface: Color(hex: 0x13110D), surfaceHigh: Color(hex: 0x201C14), bubble: Color(hex: 0x3A2F18),
+                  text: Color(hex: 0xF2EBDD), textMuted: Color(hex: 0xADA394), corner: 6, fontDesign: .serif, onAccent: Color(hex: 0x0E0D0A)),
+        AppDesign(id: "ocean", name: "Deep Ocean", tagline: "Petrol und Türkis mit Korallen-Akzent", dark: true,
+                  background: [Color(hex: 0x001219), Color(hex: 0x002A32), Color(hex: 0x003B46)],
+                  primary: Color(hex: 0x2EC4B6), secondary: Color(hex: 0x94D2BD), tertiary: Color(hex: 0xEE9B00),
+                  surface: Color(hex: 0x00222A), surfaceHigh: Color(hex: 0x05323C), bubble: Color(hex: 0x0B4A52),
+                  text: Color(hex: 0xE0F4F1), textMuted: Color(hex: 0x8DB8B3), corner: 18, onAccent: Color(hex: 0x001219)),
+        AppDesign(id: "arctic", name: "Arctic Glass", tagline: "Hell: Eisweiß mit kühlem Blau", dark: false,
+                  background: [Color(hex: 0xF7FAFD), Color(hex: 0xEAF1F9), Color(hex: 0xDCE7F5)],
+                  primary: Color(hex: 0x0068C9), secondary: Color(hex: 0x5B5BD6), tertiary: Color(hex: 0x00897B),
+                  surface: Color(hex: 0xFFFFFF), surfaceHigh: Color(hex: 0xEEF3F9), bubble: Color(hex: 0xD6E6FA),
+                  text: Color(hex: 0x14202E), textMuted: Color(hex: 0x55657A), corner: 20),
+    ]
+
+    static func byID(_ id: String) -> AppDesign { all.first { $0.id == id } ?? all[0] }
+}
+
+/// Farben und Formen des aktuell gewählten Designs.
+enum Theme {
+    /// Wird von AppSettings gesetzt, wenn der Nutzer ein Design wählt.
+    static var current: AppDesign = AppDesign.byID(UserDefaults.standard.string(forKey: "design") ?? "original")
+
+    static var navy: Color { current.background[0] }
+    static var navyMid: Color { current.background[1] }
+    static var navyPurple: Color { current.background[2] }
+    static var cyan: Color { current.primary }
+    static var blue: Color { current.tertiary }
+    static var purple: Color { current.secondary }
+    static var card: Color { current.surface }
+    static var cardHigh: Color { current.surfaceHigh }
+    static var userBubble: Color { current.bubble }
+    static var text: Color { current.text }
+    static var secondaryText: Color { current.textMuted }
+    static var onAccent: Color { current.onAccent }
+    static var corner: CGFloat { current.corner }
+
+    static var backgroundGradient: LinearGradient {
+        LinearGradient(colors: current.background, startPoint: .top, endPoint: .bottom)
+    }
+    static var accentGradient: LinearGradient {
+        LinearGradient(colors: [current.primary, current.tertiary, current.secondary], startPoint: .leading, endPoint: .trailing)
+    }
 }
 
 struct CardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .padding(14)
-            .background(Theme.card, in: RoundedRectangle(cornerRadius: 16))
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: Theme.corner))
     }
 }
 
 extension View {
     func card() -> some View { modifier(CardStyle()) }
 
-    /// Transparenter Hintergrund für Listen, damit der Logo-Verlauf sichtbar bleibt.
+    /// Transparenter Hintergrund für Listen, damit der Design-Verlauf sichtbar bleibt.
     func clearListBackground() -> some View {
         scrollContentBackground(.hidden).background(Theme.backgroundGradient.ignoresSafeArea())
     }

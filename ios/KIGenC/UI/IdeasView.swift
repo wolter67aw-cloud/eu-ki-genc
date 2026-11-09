@@ -54,7 +54,7 @@ struct IdeasView: View {
                                 Button { tagFilter = tagFilter == t ? nil : t } label: {
                                     Text("#\(t)").font(.caption).padding(.horizontal, 10).padding(.vertical, 6)
                                         .background(tagFilter == t ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card), in: Capsule())
-                                        .foregroundStyle(.white)
+                                        .foregroundStyle((tagFilter == t) ? Theme.onAccent : Theme.text)
                                 }
                             }
                         }
@@ -76,10 +76,10 @@ struct IdeasView: View {
             .padding()
         }
         .sheet(item: $editing) { kind in
-            NavigationStack { IdeaEditorView(kind: kind) }.preferredColorScheme(.dark)
+            NavigationStack { IdeaEditorView(kind: kind) }.preferredColorScheme(Theme.current.dark ? .dark : .light)
         }
         .sheet(isPresented: $showCross) {
-            NavigationStack { IdeaCrossView() }.preferredColorScheme(.dark)
+            NavigationStack { IdeaCrossView() }.preferredColorScheme(Theme.current.dark ? .dark : .light)
         }
     }
 
@@ -87,7 +87,7 @@ struct IdeasView: View {
         Button(action: run) {
             VStack(spacing: 6) {
                 Image(systemName: icon).font(.title3).foregroundStyle(Theme.accentGradient)
-                Text(title).font(.caption).foregroundStyle(.white)
+                Text(title).font(.caption).foregroundStyle(Theme.text)
             }
             .frame(maxWidth: .infinity, minHeight: 64)
             .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
@@ -109,11 +109,11 @@ struct IdeaRow: View {
                 Text(idea.locked ? "🔒" : idea.kind.emoji).font(.title2).frame(width: 56, height: 56).background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 10))
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(idea.title).font(.headline).lineLimit(1).foregroundStyle(.white)
+                Text(idea.title).font(.headline).lineLimit(1).foregroundStyle(Theme.text)
                 Text(idea.locked ? "Verschlossen bis \(idea.openAt!.formatted(date: .abbreviated, time: .shortened))"
                      : "\(idea.kind.label) · \(idea.createdAt.formatted(date: .abbreviated, time: .shortened))\(idea.mood.isEmpty ? "" : " · \(idea.mood)")")
                     .font(.caption).foregroundStyle(Theme.secondaryText)
-                if !idea.locked && !idea.text.isEmpty { Text(idea.text).font(.caption).lineLimit(2).foregroundStyle(.white.opacity(0.85)) }
+                if !idea.locked && !idea.text.isEmpty { Text(idea.text).font(.caption).lineLimit(2).foregroundStyle(Theme.text.opacity(0.85)) }
                 if store.tagging.contains(idea.id) {
                     Text("Schlagwörter werden erstellt …").font(.caption2).foregroundStyle(Theme.cyan)
                 } else if !idea.locked && !idea.tags.isEmpty {
@@ -387,7 +387,7 @@ struct IdeaDetailView: View {
             .navigationTitle("Idee")
             .navigationBarTitleDisplayMode(.inline)
             .onDisappear { player?.stop() }
-            .sheet(isPresented: $showCross) { NavigationStack { IdeaCrossView(first: idea) }.preferredColorScheme(.dark) }
+            .sheet(isPresented: $showCross) { NavigationStack { IdeaCrossView(first: idea) }.preferredColorScheme(Theme.current.dark ? .dark : .light) }
             .confirmationDialog("Idee löschen?", isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Löschen", role: .destructive) { player?.stop(); store.delete(idea); dismiss() }
             }
@@ -436,7 +436,7 @@ struct FlowTags: View {
                 Button { onRemove(t) } label: {
                     HStack(spacing: 4) { Text("#\(t)").lineLimit(1); Image(systemName: "xmark").font(.caption2) }
                         .font(.caption).padding(.horizontal, 8).padding(.vertical, 5)
-                        .background(Theme.blue.opacity(0.35), in: Capsule()).foregroundStyle(.white)
+                        .background(Theme.blue.opacity(0.35), in: Capsule()).foregroundStyle(Theme.text)
                 }
             }
         }
@@ -500,7 +500,7 @@ struct IdeaCrossView: View {
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Idee \(label) · antippen zum Wechseln").font(.caption2).foregroundStyle(Theme.cyan)
-                Text(binding.wrappedValue.map { "\($0.kind.emoji) \($0.title)" } ?? "Bitte wählen").font(.headline).foregroundStyle(.white)
+                Text(binding.wrappedValue.map { "\($0.kind.emoji) \($0.title)" } ?? "Bitte wählen").font(.headline).foregroundStyle(Theme.text)
                 if let t = binding.wrappedValue?.text, !t.isEmpty { Text(t).font(.caption).lineLimit(3).foregroundStyle(Theme.secondaryText) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

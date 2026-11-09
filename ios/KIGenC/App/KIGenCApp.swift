@@ -12,10 +12,12 @@ struct KIGenCApp: App {
                 RootView()
                     .id(session.sessionID) // neue Sitzung → alle Eingaben leer
             }
+            .id(settings.design) // Design gewechselt → Oberfläche neu aufbauen
             .environmentObject(settings)
             .environmentObject(session)
-            .preferredColorScheme(.dark)
-            .tint(Theme.cyan)
+            .preferredColorScheme(AppDesign.byID(settings.design).dark ? .dark : .light)
+            .fontDesign(AppDesign.byID(settings.design).fontDesign)
+            .tint(AppDesign.byID(settings.design).primary)
             .background(Theme.backgroundGradient.ignoresSafeArea())
         }
         .onChange(of: scenePhase) { _, phase in

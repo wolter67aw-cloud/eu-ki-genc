@@ -26,8 +26,8 @@ struct RootView: View {
             UITabBar.appearance().scrollEdgeAppearance = appearance
             let nav = UINavigationBarAppearance()
             nav.configureWithTransparentBackground()
-            nav.titleTextAttributes = [.foregroundColor: UIColor.white]
-            nav.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
+            nav.titleTextAttributes = [.foregroundColor: UIColor(Theme.text)]
+            nav.largeTitleTextAttributes = [.foregroundColor: UIColor(Theme.text)]
             UINavigationBar.appearance().standardAppearance = nav
             UINavigationBar.appearance().scrollEdgeAppearance = nav
             if !settings.onboardingDone { showOnboarding = true }
@@ -91,7 +91,7 @@ struct OnboardingView: View {
             .padding(20)
         }
         .background(Theme.backgroundGradient.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(Theme.current.dark ? .dark : .light)
     }
 }
 

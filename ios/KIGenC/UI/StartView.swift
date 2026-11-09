@@ -313,7 +313,7 @@ struct StartView: View {
     private func tile(_ c: StartCategory) -> some View {
         VStack(spacing: 4) {
             Text(c.emoji).font(.title)
-            Text(c.title).font(.caption.bold()).foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.8)
+            Text(c.title).font(.caption.bold()).foregroundStyle(Theme.text).lineLimit(1).minimumScaleFactor(0.8)
             Text(c.subtitle).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(2).multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, minHeight: 92)
@@ -381,7 +381,7 @@ struct StartView: View {
                         Spacer()
                         Image(systemName: showPrompt ? "chevron.up" : "chevron.down")
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Theme.text)
                 }
                 if showPrompt {
                     TextEditor(text: Binding(get: { model.builtPrompt }, set: { model.customPrompt = $0 }))
@@ -430,7 +430,7 @@ struct StartView: View {
         Button(action: action) {
             Text(title).font(.callout).padding(.horizontal, 12).padding(.vertical, 7)
                 .background(selected ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card), in: Capsule())
-                .foregroundStyle(.white)
+                .foregroundStyle((selected) ? Theme.onAccent : Theme.text)
         }
     }
 }
@@ -448,7 +448,7 @@ struct FlowChips: View {
                     Text(o).font(.caption).lineLimit(1).minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity).padding(.vertical, 7).padding(.horizontal, 4)
                         .background(selected == o ? AnyShapeStyle(Theme.accentGradient) : AnyShapeStyle(Theme.card), in: Capsule())
-                        .foregroundStyle(.white)
+                        .foregroundStyle((selected == o) ? Theme.onAccent : Theme.text)
                 }
             }
         }
