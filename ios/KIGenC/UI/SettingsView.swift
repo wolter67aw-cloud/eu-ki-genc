@@ -44,6 +44,12 @@ struct SettingsView: View {
                 } header: { Text("Design") } footer: { Text("Wähle eine Oberfläche – wie die Skins eines Synthesizers. Die Änderung gilt sofort.") }
                 .listRowBackground(Theme.card)
 
+                Section {
+                    AppIconPicker()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                } header: { Text("App-Symbol") } footer: { Text("Symbol auf dem Home-Bildschirm. iOS bestätigt den Wechsel kurz mit einer Meldung.") }
+                .listRowBackground(Theme.card)
+
                 Section("Modelle") {
                     Picker("Chat", selection: $settings.chatModel) { ForEach(models(AppSettings.defaultChatModels, settings.chatModel), id: \.self) { Text($0) } }
                     Picker("Code", selection: $settings.codeModel) { ForEach(models(AppSettings.defaultCodeModels, settings.codeModel), id: \.self) { Text($0) } }

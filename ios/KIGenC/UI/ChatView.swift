@@ -112,7 +112,7 @@ struct ChatView: View {
     private var emptyState: some View {
         ScrollView {
             VStack(spacing: 16) {
-                Image("Logo").resizable().scaledToFit().frame(width: 96, height: 96).padding(.top, 30)
+                Image(Theme.current.symbol ?? "Logo").resizable().scaledToFit().frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 22)).padding(.top, 30)
                 Text("Wie kann ich helfen?").font(.title2.bold())
                 ForEach(["Erkläre mir Quantencomputer in einfachen Worten", "Schreibe eine freundliche Absage-E-Mail", "Plane mir eine Woche gesunde Ernährung", "Was ist auf diesem Foto zu sehen?"], id: \.self) { s in
                     Button { model.input = s; focused = true } label: {

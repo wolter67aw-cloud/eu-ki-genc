@@ -25,6 +25,12 @@ struct AppDesign: Identifiable, Equatable {
     var fontDesign: Font.Design = .default
     /// Textfarbe auf Akzentflächen (hell oder dunkel, je nach Akzent).
     var onAccent: Color = .white
+    /// Eigene Akzentfarben für Verläufe (z. B. Regenbogen).
+    var accents: [Color]? = nil
+    /// Symbol des Designs (Asset-Name); nil = KI-GenC-Logo.
+    var symbol: String? = nil
+    /// Passendes App-Symbol (alternatives Icon); nil = Standard.
+    var iconName: String? = nil
 
     static func == (a: AppDesign, b: AppDesign) -> Bool { a.id == b.id }
 
@@ -69,6 +75,44 @@ struct AppDesign: Identifiable, Equatable {
                   primary: Color(hex: 0x2EC4B6), secondary: Color(hex: 0x94D2BD), tertiary: Color(hex: 0xEE9B00),
                   surface: Color(hex: 0x00222A), surfaceHigh: Color(hex: 0x05323C), bubble: Color(hex: 0x0B4A52),
                   text: Color(hex: 0xE0F4F1), textMuted: Color(hex: 0x8DB8B3), corner: 18, onAccent: Color(hex: 0x001219)),
+        AppDesign(id: "genc", name: "GenC Hologramm", tagline: "Schillernd: Cyan, Violett, Magenta", dark: true,
+                  background: [Color(hex: 0x0A0F2E), Color(hex: 0x2A1660), Color(hex: 0x0E3E6C)],
+                  primary: Color(hex: 0x3EE6FF), secondary: Color(hex: 0xFF5BD8), tertiary: Color(hex: 0x8B7BFF),
+                  surface: Color(hex: 0x141A44), surfaceHigh: Color(hex: 0x1E2558), bubble: Color(hex: 0x3A2380),
+                  text: Color(hex: 0xEAF2FF), textMuted: Color(hex: 0xA8B4E0), corner: 16, onAccent: Color(hex: 0x0A0F2E),
+                  accents: [Color(hex: 0x3EE6FF), Color(hex: 0x8B7BFF), Color(hex: 0xFF5BD8)], symbol: "Symbol-genc", iconName: "AppIcon-GenC"),
+        AppDesign(id: "vielfalt", name: "Vielfalt", tagline: "Viele Farben, ein Miteinander", dark: true,
+                  background: [Color(hex: 0x1B1B2F), Color(hex: 0x2A2440), Color(hex: 0x162447)],
+                  primary: Color(hex: 0xFFB84D), secondary: Color(hex: 0x4ECDC4), tertiary: Color(hex: 0xB45CFF),
+                  surface: Color(hex: 0x232338), surfaceHigh: Color(hex: 0x2E2E48), bubble: Color(hex: 0x3D3060),
+                  text: Color(hex: 0xF1EEFF), textMuted: Color(hex: 0xB3ADCF), corner: 18, onAccent: Color(hex: 0x1B1B2F),
+                  accents: [Color(hex: 0xFF6B6B), Color(hex: 0xFFB84D), Color(hex: 0xFFE66D), Color(hex: 0x4ECDC4), Color(hex: 0x4D96FF), Color(hex: 0xB45CFF)],
+                  symbol: "Symbol-vielfalt", iconName: "AppIcon-Vielfalt"),
+        AppDesign(id: "vegan", name: "Vegan", tagline: "Blattgrün, Limette und Getreide", dark: true,
+                  background: [Color(hex: 0x0B2A1A), Color(hex: 0x123D24), Color(hex: 0x1A4D2E)],
+                  primary: Color(hex: 0x7ED957), secondary: Color(hex: 0xC9F27B), tertiary: Color(hex: 0xE0B15A),
+                  surface: Color(hex: 0x12301F), surfaceHigh: Color(hex: 0x1A3F29), bubble: Color(hex: 0x245C34),
+                  text: Color(hex: 0xE8F7E4), textMuted: Color(hex: 0xA6C9A0), corner: 20, onAccent: Color(hex: 0x0B2A1A),
+                  symbol: "Symbol-vegan", iconName: "AppIcon-Vegan"),
+        AppDesign(id: "pride", name: "Pride", tagline: "Regenbogenfarben auf Nachtviolett", dark: true,
+                  background: [Color(hex: 0x140A24), Color(hex: 0x1E1235), Color(hex: 0x120A1E)],
+                  primary: Color(hex: 0xFF6FB5), secondary: Color(hex: 0x4D9BFF), tertiary: Color(hex: 0xFFD23F),
+                  surface: Color(hex: 0x1E1430), surfaceHigh: Color(hex: 0x2A1C42), bubble: Color(hex: 0x4A1F5E),
+                  text: Color(hex: 0xFFF1FA), textMuted: Color(hex: 0xC9B3D6), corner: 22,
+                  accents: [Color(hex: 0xE40303), Color(hex: 0xFF8C00), Color(hex: 0xFFED00), Color(hex: 0x008026), Color(hex: 0x004DFF), Color(hex: 0x750787)],
+                  symbol: "Symbol-pride", iconName: "AppIcon-Pride"),
+        AppDesign(id: "zweisamkeit", name: "Zweisamkeit", tagline: "Weinrot, Rosé und Gold – für zwei", dark: true,
+                  background: [Color(hex: 0x2A0A14), Color(hex: 0x4A0F24), Color(hex: 0x3A0A1C)],
+                  primary: Color(hex: 0xF2C76E), secondary: Color(hex: 0xF7A8B8), tertiary: Color(hex: 0xE86A8A),
+                  surface: Color(hex: 0x3A0F1E), surfaceHigh: Color(hex: 0x4A1628), bubble: Color(hex: 0x6A1E38),
+                  text: Color(hex: 0xFFEFF2), textMuted: Color(hex: 0xD9A7B2), corner: 16, fontDesign: .serif, onAccent: Color(hex: 0x2A0A14),
+                  symbol: "Symbol-zweisamkeit", iconName: "AppIcon-Zweisamkeit"),
+        AppDesign(id: "klassisch", name: "Klassisch", tagline: "Schlicht und hell – Weiß mit Indigo", dark: false,
+                  background: [Color(hex: 0xFFFFFF), Color(hex: 0xF4F5F8), Color(hex: 0xECEEF3)],
+                  primary: Color(hex: 0x3F51B5), secondary: Color(hex: 0x607D8B), tertiary: Color(hex: 0x2196F3),
+                  surface: Color(hex: 0xFFFFFF), surfaceHigh: Color(hex: 0xEEF0F5), bubble: Color(hex: 0xDDE3F7),
+                  text: Color(hex: 0x1A1C22), textMuted: Color(hex: 0x5F6470), corner: 12,
+                  symbol: "Symbol-klassisch", iconName: "AppIcon-Klassisch"),
         AppDesign(id: "arctic", name: "Arctic Glass", tagline: "Hell: Eisweiß mit kühlem Blau", dark: false,
                   background: [Color(hex: 0xF7FAFD), Color(hex: 0xEAF1F9), Color(hex: 0xDCE7F5)],
                   primary: Color(hex: 0x0068C9), secondary: Color(hex: 0x5B5BD6), tertiary: Color(hex: 0x00897B),
@@ -102,7 +146,7 @@ enum Theme {
         LinearGradient(colors: current.background, startPoint: .top, endPoint: .bottom)
     }
     static var accentGradient: LinearGradient {
-        LinearGradient(colors: [current.primary, current.tertiary, current.secondary], startPoint: .leading, endPoint: .trailing)
+        LinearGradient(colors: current.accents ?? [current.primary, current.tertiary, current.secondary], startPoint: .leading, endPoint: .trailing)
     }
 }
 

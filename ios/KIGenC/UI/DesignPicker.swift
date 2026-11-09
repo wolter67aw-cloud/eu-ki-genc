@@ -34,6 +34,12 @@ private struct DesignCard: View {
                         .padding(.horizontal, 8).frame(height: 30)
                         .background(d.surface, in: RoundedRectangle(cornerRadius: d.corner * 0.5))
                         .overlay(RoundedRectangle(cornerRadius: d.corner * 0.5).stroke(d.primary.opacity(0.5)))
+                        .overlay(alignment: .trailing) {
+                            if let sym = d.symbol {
+                                Image(sym).resizable().scaledToFill().frame(width: 22, height: 22)
+                                    .clipShape(RoundedRectangle(cornerRadius: 5)).padding(.trailing, 4)
+                            }
+                        }
                     // Drehregler
                     HStack {
                         Knob(design: d, accent: d.primary, value: 0.72)
@@ -82,5 +88,60 @@ private struct Knob: View {
                 .rotationEffect(.degrees(-135 + 270 * value))
         }
         .frame(width: 36, height: 36)
+    }
+}
+
+/// Wählbare App-Symbole für den Home-Bildschirm (alternative App-Icons).
+struct AppIconChoice: Identifiable {
+    let id: String
+    let label: String
+    let iconName: String?   // nil = Standard-Symbol
+    let preview: String     // Asset für die Vorschau
+
+    static let all: [AppIconChoice] = [
+        AppIconChoice(id: "standard", label: "KI-GenC", iconName: nil, preview: "Logo"),
+        AppIconChoice(id: "genc", label: "GenC Hologramm", iconName: "AppIcon-GenC", preview: "Symbol-genc"),
+        AppIconChoice(id: "vielfalt", label: "Vielfalt", iconName: "AppIcon-Vielfalt", preview: "Symbol-vielfalt"),
+        AppIconChoice(id: "vegan", label: "Vegan", iconName: "AppIcon-Vegan", preview: "Symbol-vegan"),
+        AppIconChoice(id: "pride", label: "Pride", iconName: "AppIcon-Pride", preview: "Symbol-pride"),
+        AppIconChoice(id: "zweisamkeit", label: "Zweisamkeit", iconName: "AppIcon-Zweisamkeit", preview: "Symbol-zweisamkeit"),
+        AppIconChoice(id: "klassisch", label: "Klassisch", iconName: "AppIcon-Klassisch", preview: "Symbol-klassisch"),
+    ]
+}
+
+struct AppIconPicker: View {
+    @State private var current: String? = UIApplication.shared.alternateIconName
+    @State private var error: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(AppIconChoice.all) { c in
+                        Button { set(c.iconName) } label: {
+                            VStack(spacing: 4) {
+                                Image(c.preview).resizable().scaledToFill().frame(width: 60, height: 60)
+                                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(current == c.iconName ? Theme.cyan : .clear, lineWidth: 3))
+                                Text(c.label).font(.caption2).foregroundStyle(Theme.text).lineLimit(1)
+                            }
+                            .frame(width: 72)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            if let error { Text(error).font(.caption).foregroundStyle(.orange) }
+        }
+    }
+
+    func set(_ name: String?) {
+        guard UIApplication.shared.supportsAlternateIcons else { error = "Dieses Gerät unterstützt keine anderen App-Symbole."; return }
+        UIApplication.shared.setAlternateIconName(name) { err in
+            DispatchQueue.main.async {
+                if let err { error = err.localizedDescription } else { current = name; error = nil }
+            }
+        }
     }
 }

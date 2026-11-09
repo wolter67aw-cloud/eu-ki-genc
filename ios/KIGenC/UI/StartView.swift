@@ -273,7 +273,7 @@ struct StartView: View {
     private var home: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Image("Logo").resizable().scaledToFit().frame(width: 56, height: 56)
+                Image(Theme.current.symbol ?? "Logo").resizable().scaledToFit().frame(width: 56, height: 56).clipShape(RoundedRectangle(cornerRadius: 14))
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Was möchtest du machen?").font(.title3.bold())
                     Text("Beschreib es in eigenen Worten – oder wähle unten Schritt für Schritt.").font(.caption).foregroundStyle(Theme.secondaryText)
