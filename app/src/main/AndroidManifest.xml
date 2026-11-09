@@ -42,14 +42,10 @@
         android:theme="@style/Theme.KiGenC">
 
         <activity
-            android:name=".MainActivity"
+            android:name=".HomeActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -61,6 +57,93 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+
+        <!-- App-Symbole: genau eines dieser Aliasse ist aktiv (Optionen → App-Symbol).
+             „.MainActivity“ ist das Standard-Symbol und behält den bisherigen Namen,
+             damit vorhandene Verknüpfungen auf dem Startbildschirm erhalten bleiben. -->
+        <activity-alias
+            android:name=".MainActivity"
+            android:targetActivity=".HomeActivity"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconVielfalt"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_vielfalt"
+            android:roundIcon="@mipmap/ic_launcher_vielfalt"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconVegan"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_vegan"
+            android:roundIcon="@mipmap/ic_launcher_vegan"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconPride"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_pride"
+            android:roundIcon="@mipmap/ic_launcher_pride"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconZweisamkeit"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_zweisamkeit"
+            android:roundIcon="@mipmap/ic_launcher_zweisamkeit"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconKlassisch"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_klassisch"
+            android:roundIcon="@mipmap/ic_launcher_klassisch"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".IconGenC"
+            android:targetActivity=".HomeActivity"
+            android:icon="@mipmap/ic_launcher_genc"
+            android:roundIcon="@mipmap/ic_launcher_genc"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
 
         <receiver
             android:name=".update.InstallReceiver"

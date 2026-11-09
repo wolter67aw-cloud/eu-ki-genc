@@ -62,9 +62,15 @@ data class AppDesign(
     /** Eckenradius in dp für mittlere Elemente (0 = kantig wie ein Hardware-Gerät). */
     val corner: Int,
     val font: DesignFont = DesignFont.DEFAULT,
+    /** Eigene Akzentfarben für Verläufe (z. B. Regenbogen); sonst Primär/Tertiär/Sekundär. */
+    val accents: List<Color>? = null,
+    /** Symbol des Designs (Startseite, Vorschau); null = KI-GenC-Logo. */
+    @androidx.annotation.DrawableRes val symbol: Int? = null,
+    /** Passendes App-Symbol (siehe data/AppIcons). */
+    val iconId: String = "standard",
 ) {
     val backgroundBrush: Brush get() = Brush.verticalGradient(background)
-    val accentBrush: Brush get() = Brush.linearGradient(listOf(primary, tertiary, secondary))
+    val accentBrush: Brush get() = Brush.linearGradient(accents ?: listOf(primary, tertiary, secondary))
 }
 
 val DESIGNS = listOf(
@@ -107,6 +113,44 @@ val DESIGNS = listOf(
         "ocean", "Deep Ocean", "Petrol und Türkis mit Korallen-Akzent", true,
         listOf(Color(0xFF001219), Color(0xFF002A32), Color(0xFF003B46)), Color(0xFF2EC4B6), Color(0xFF94D2BD), Color(0xFFEE9B00),
         Color(0xFF00222A), Color(0xFFE0F4F1), Color(0xFF8DB8B3), 18,
+    ),
+    AppDesign(
+        "genc", "GenC Hologramm", "Schillernd wie ein Hologramm – Cyan, Violett, Magenta", true,
+        listOf(Color(0xFF0A0F2E), Color(0xFF2A1660), Color(0xFF0E3E6C)), Color(0xFF3EE6FF), Color(0xFFFF5BD8), Color(0xFF8B7BFF),
+        Color(0xFF141A44), Color(0xFFEAF2FF), Color(0xFFA8B4E0), 16,
+        accents = listOf(Color(0xFF3EE6FF), Color(0xFF8B7BFF), Color(0xFFFF5BD8)), symbol = eu.kigenc.app.R.drawable.symbol_genc, iconId = "genc",
+    ),
+    AppDesign(
+        "vielfalt", "Vielfalt", "Bunt und offen – viele Farben, ein Miteinander", true,
+        listOf(Color(0xFF1B1B2F), Color(0xFF2A2440), Color(0xFF162447)), Color(0xFFFFB84D), Color(0xFF4ECDC4), Color(0xFFB45CFF),
+        Color(0xFF232338), Color(0xFFF1EEFF), Color(0xFFB3ADCF), 18,
+        accents = listOf(Color(0xFFFF6B6B), Color(0xFFFFB84D), Color(0xFFFFE66D), Color(0xFF4ECDC4), Color(0xFF4D96FF), Color(0xFFB45CFF)),
+        symbol = eu.kigenc.app.R.drawable.symbol_vielfalt, iconId = "vielfalt",
+    ),
+    AppDesign(
+        "vegan", "Vegan", "Frisches Blattgrün, Limette und Getreide", true,
+        listOf(Color(0xFF0B2A1A), Color(0xFF123D24), Color(0xFF1A4D2E)), Color(0xFF7ED957), Color(0xFFC9F27B), Color(0xFFE0B15A),
+        Color(0xFF12301F), Color(0xFFE8F7E4), Color(0xFFA6C9A0), 20,
+        symbol = eu.kigenc.app.R.drawable.symbol_vegan, iconId = "vegan",
+    ),
+    AppDesign(
+        "pride", "Pride", "Regenbogenfarben auf Nachtviolett", true,
+        listOf(Color(0xFF140A24), Color(0xFF1E1235), Color(0xFF120A1E)), Color(0xFFFF6FB5), Color(0xFF4D9BFF), Color(0xFFFFD23F),
+        Color(0xFF1E1430), Color(0xFFFFF1FA), Color(0xFFC9B3D6), 22,
+        accents = listOf(Color(0xFFE40303), Color(0xFFFF8C00), Color(0xFFFFED00), Color(0xFF008026), Color(0xFF004DFF), Color(0xFF750787)),
+        symbol = eu.kigenc.app.R.drawable.symbol_pride, iconId = "pride",
+    ),
+    AppDesign(
+        "zweisamkeit", "Zweisamkeit", "Weinrot, Rosé und Gold – für zwei", true,
+        listOf(Color(0xFF2A0A14), Color(0xFF4A0F24), Color(0xFF3A0A1C)), Color(0xFFF2C76E), Color(0xFFF7A8B8), Color(0xFFE86A8A),
+        Color(0xFF3A0F1E), Color(0xFFFFEFF2), Color(0xFFD9A7B2), 16, DesignFont.SERIF,
+        symbol = eu.kigenc.app.R.drawable.symbol_zweisamkeit, iconId = "zweisamkeit",
+    ),
+    AppDesign(
+        "klassisch", "Klassisch", "Schlicht und hell – Weiß mit Indigo", false,
+        listOf(Color(0xFFFFFFFF), Color(0xFFF4F5F8), Color(0xFFECEEF3)), Color(0xFF3F51B5), Color(0xFF607D8B), Color(0xFF2196F3),
+        Color(0xFFFFFFFF), Color(0xFF1A1C22), Color(0xFF5F6470), 12,
+        symbol = eu.kigenc.app.R.drawable.symbol_klassisch, iconId = "klassisch",
     ),
     AppDesign(
         "arctic", "Arctic Glass", "Hell und klar: Eisweiß mit kühlem Blau", false,

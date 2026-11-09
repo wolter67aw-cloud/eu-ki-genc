@@ -21,7 +21,7 @@ import eu.kigenc.app.ui.chat.SharedContent
 import eu.kigenc.app.ui.theme.AppBackground
 import eu.kigenc.app.ui.theme.KiTheme
 
-class MainActivity : ComponentActivity() {
+class HomeActivity : ComponentActivity() {
 
     private var shared by mutableStateOf<SharedContent?>(null)
     private var openUpdate by mutableStateOf(false)

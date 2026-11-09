@@ -78,6 +78,12 @@ private fun DesignCard(d: AppDesign, selected: Boolean, onClick: () -> Unit) {
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Text("KI-GENC", color = d.primary, fontFamily = d.fontFamily(), fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 2.sp)
+                    d.symbol?.let {
+                        androidx.compose.foundation.Image(
+                            androidx.compose.ui.res.painterResource(it), null,
+                            Modifier.align(Alignment.CenterEnd).size(22.dp).clip(RoundedCornerShape(5.dp))
+                        )
+                    }
                 }
                 // Drehregler
                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
@@ -120,5 +126,30 @@ private fun Knob(d: AppDesign, accent: Color, value: Float) {
         val angle = Math.toRadians((135 + 270 * value).toDouble())
         val inner = r - stroke * 2.2f
         drawLine(accent, center, Offset(center.x + (cos(angle) * inner).toFloat(), center.y + (sin(angle) * inner).toFloat()), strokeWidth = 2.5.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
+/** Auswahl des Symbols auf dem Startbildschirm. */
+@Composable
+fun AppIconPicker(currentId: String, onSelect: (eu.kigenc.app.data.AppIcon) -> Unit) {
+    LazyRow(
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        items(eu.kigenc.app.data.AppIcons.all, key = { it.id }) { icon ->
+            val selected = icon.id == currentId
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(72.dp).clickable { onSelect(icon) }
+            ) {
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(icon.preview), icon.label,
+                    Modifier.size(60.dp).clip(RoundedCornerShape(16.dp))
+                        .border(if (selected) 3.dp else 0.dp, if (selected) MaterialTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(16.dp))
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(icon.label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }

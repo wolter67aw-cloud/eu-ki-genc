@@ -88,7 +88,10 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
     LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(painterResource(R.drawable.logo_kigenc), null, Modifier.size(56.dp))
+                Image(
+                    painterResource(eu.kigenc.app.ui.theme.LocalDesign.current.symbol ?: R.drawable.logo_kigenc), null,
+                    Modifier.size(56.dp).clip(RoundedCornerShape(14.dp))
+                )
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Was möchtest du machen?", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)

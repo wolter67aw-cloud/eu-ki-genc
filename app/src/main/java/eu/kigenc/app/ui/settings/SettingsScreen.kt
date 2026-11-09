@@ -279,6 +279,28 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     }
                 }
             }
+            item { SectionTitle("App-Symbol") }
+            item {
+                var currentIcon by remember { mutableStateOf(eu.kigenc.app.data.AppIcons.current(context).id) }
+                val design = eu.kigenc.app.ui.theme.designById(settings.design)
+                Column {
+                    Text(
+                        "Symbol auf dem Startbildschirm. Nach dem Wechsel kann es einige Sekunden dauern, bis es erscheint – ggf. das Symbol neu auf den Startbildschirm ziehen.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                    )
+                    AppIconPicker(currentIcon) { icon ->
+                        eu.kigenc.app.data.AppIcons.apply(context, icon.id)
+                        currentIcon = icon.id
+                    }
+                    if (design.iconId != currentIcon) {
+                        TextButton(
+                            onClick = { eu.kigenc.app.data.AppIcons.apply(context, design.iconId); currentIcon = design.iconId },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) { Text("Symbol passend zum Design „${design.name}“ verwenden") }
+                    }
+                }
+            }
             item { SectionTitle("Darstellung & Sprache") }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 item {

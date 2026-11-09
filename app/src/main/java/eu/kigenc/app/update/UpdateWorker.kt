@@ -17,7 +17,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import eu.kigenc.app.KiApp
-import eu.kigenc.app.MainActivity
+import eu.kigenc.app.HomeActivity
 import eu.kigenc.app.R
 import eu.kigenc.app.app
 import java.util.concurrent.TimeUnit
@@ -59,8 +59,8 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
 
         val open = PendingIntent.getActivity(
             ctx, 1,
-            Intent(ctx, MainActivity::class.java)
-                .putExtra(MainActivity.EXTRA_OPEN_UPDATE, true)
+            Intent(ctx, HomeActivity::class.java)
+                .putExtra(HomeActivity.EXTRA_OPEN_UPDATE, true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

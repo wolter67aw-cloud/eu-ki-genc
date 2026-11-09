@@ -27,7 +27,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import eu.kigenc.app.KiApp
-import eu.kigenc.app.MainActivity
+import eu.kigenc.app.HomeActivity
 import eu.kigenc.app.R
 import eu.kigenc.app.ai.ApiMessage
 import eu.kigenc.app.ai.MistralClient
@@ -428,7 +428,7 @@ class CapsuleWorker(context: Context, params: WorkerParameters) : CoroutineWorke
         ) return Result.success()
         val title = inputData.getString("title").orEmpty()
         val open = PendingIntent.getActivity(
-            ctx, 3, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            ctx, 3, Intent(ctx, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val n = NotificationCompat.Builder(ctx, KiApp.CHANNEL_REMINDERS)
