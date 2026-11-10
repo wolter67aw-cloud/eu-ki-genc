@@ -19,10 +19,13 @@ jobs:
     runs-on: ${{ github.event.inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 45
     env:
-      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-      ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 }}
-      TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Secrets bevorzugt; falls versehentlich als „Variables“ angelegt, werden diese ebenfalls genutzt.
+      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || vars.APP_STORE_CONNECT_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || vars.APP_STORE_CONNECT_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 || vars.APP_STORE_CONNECT_KEY_P8 }}
+      TEAM_ID: ${{ secrets.APPLE_TEAM_ID || vars.APPLE_TEAM_ID }}
+      VARS_USED: ${{ vars.APPLE_TEAM_ID != '' || vars.APP_STORE_CONNECT_KEY_ID != '' || vars.APP_STORE_CONNECT_ISSUER_ID != '' || vars.APP_STORE_CONNECT_KEY_P8 != '' }}
+      P8_AS_VAR: ${{ vars.APP_STORE_CONNECT_KEY_P8 != '' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -45,6 +48,12 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO | tee build.log | grep -E "error:|warning: unre|BUILD" || true
           grep -q "BUILD SUCCEEDED" build.log || { grep -E "error:" build.log | head -50; exit 1; }
+
+      - name: Hinweis zu Variables
+        if: env.VARS_USED == 'true'
+        run: |
+          echo "ℹ️ Mindestens ein Apple-Wert ist unter „Variables“ statt „Secrets“ eingetragen – wird trotzdem verwendet."
+          if [ "$P8_AS_VAR" = "true" ]; then echo "⚠️ Der private Schlüssel (.p8) ist als Variable öffentlich sichtbar – bitte als Secret anlegen und die Variable löschen."; fi
 
       - name: Archivieren und zu TestFlight hochladen
         if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8 != '' && github.ref == 'refs/heads/main'
