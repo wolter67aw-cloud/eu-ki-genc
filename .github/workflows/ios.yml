@@ -47,7 +47,7 @@ jobs:
           grep -q "BUILD SUCCEEDED" build.log || { grep -E "error:" build.log | head -50; exit 1; }
 
       - name: Archivieren und zu TestFlight hochladen
-        if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && github.ref == 'refs/heads/main'
+        if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8 != '' && github.ref == 'refs/heads/main'
         working-directory: ios
         run: |
           set -o pipefail
@@ -81,5 +81,10 @@ jobs:
           echo "✅ Build ${{ github.run_number }} an TestFlight übergeben – nach der Verarbeitung (5–30 Min.) in App Store Connect sichtbar."
 
       - name: Hinweis ohne Apple-Schlüssel
-        if: env.ASC_KEY_ID == '' || env.TEAM_ID == ''
-        run: echo "ℹ️ Noch keine App-Store-Connect-Secrets – nur Kompilierprüfung, kein TestFlight-Upload."
+        if: env.ASC_KEY_ID == '' || env.TEAM_ID == '' || env.ASC_ISSUER_ID == '' || env.ASC_KEY_P8 == ''
+        run: |
+          echo "ℹ️ Nicht alle App-Store-Connect-Secrets gefunden – nur Kompilierprüfung, kein TestFlight-Upload."
+          for n in APPLE_TEAM_ID:TEAM_ID APP_STORE_CONNECT_KEY_ID:ASC_KEY_ID APP_STORE_CONNECT_ISSUER_ID:ASC_ISSUER_ID APP_STORE_CONNECT_KEY_P8:ASC_KEY_P8; do
+            name=${n%%:*}; var=${n##*:}
+            if [ -n "${!var}" ]; then echo "  ✅ $name gesetzt"; else echo "  ❌ $name fehlt"; fi
+          done
