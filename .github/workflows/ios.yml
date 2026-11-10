@@ -67,23 +67,33 @@ jobs:
           print(f"Aussteller-ID: {'ok' if re.fullmatch(r'[0-9a-f-]{36}', iss) else 'UNGEWÖHNLICH – erwartet UUID mit Bindestrichen'}")
           print(f"Team-ID: {'ok' if re.fullmatch(r'[A-Z0-9]{10}', team) else 'UNGEWÖHNLICH – erwartet 10 Zeichen'}")
           print(f".p8: BEGIN-Zeile {'vorhanden' if 'BEGIN PRIVATE KEY' in key else 'FEHLT'}, END-Zeile {'vorhanden' if 'END PRIVATE KEY' in key else 'FEHLT'}")
-          try:
-              token = jwt.encode({"iss": iss, "iat": int(time.time()), "exp": int(time.time()) + 600, "aud": "appstoreconnect-v1"},
-                                 key, algorithm="ES256", headers={"kid": kid, "typ": "JWT"})
-          except Exception as e:
-              print("❌ Die .p8-Datei ist kein gültiger privater Schlüssel:", type(e).__name__); raise SystemExit(0)
-          req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=eu.kigenc.app",
-                                       headers={"Authorization": f"Bearer {token}"})
-          try:
-              with urllib.request.urlopen(req, timeout=30) as r:
-                  apps = json.load(r).get("data", [])
-                  print("✅ Apple akzeptiert den API-Schlüssel.")
-                  print("✅ App eu.kigenc.app in App Store Connect gefunden." if apps else "❌ Keine App mit Bundle-ID eu.kigenc.app in App Store Connect angelegt.")
-          except urllib.error.HTTPError as e:
-              body = e.read().decode(errors="ignore")
-              try: detail = "; ".join(f"{x.get('code')}: {x.get('detail')}" for x in json.loads(body).get("errors", []))
-              except Exception: detail = body[:300]
-              print(f"❌ Apple lehnt den Zugang ab (HTTP {e.code}): {detail}")
+          def call(claims, label):
+              try:
+                  token = jwt.encode(claims, key, algorithm="ES256", headers={"kid": kid, "typ": "JWT"})
+              except Exception as e:
+                  print("❌ Die .p8-Datei ist kein gültiger privater Schlüssel:", type(e).__name__); return False
+              req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=eu.kigenc.app",
+                                           headers={"Authorization": f"Bearer {token}"})
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as r:
+                      apps = json.load(r).get("data", [])
+                      print(f"✅ Apple akzeptiert den API-Schlüssel ({label}).")
+                      print("✅ App eu.kigenc.app in App Store Connect gefunden." if apps else "❌ Keine App mit Bundle-ID eu.kigenc.app in App Store Connect angelegt.")
+                      return True
+              except urllib.error.HTTPError as e:
+                  body = e.read().decode(errors="ignore")
+                  try: detail = "; ".join(f"{x.get('code')}: {x.get('detail')}" for x in json.loads(body).get("errors", []))
+                  except Exception: detail = body[:300]
+                  print(f"   {label}: abgelehnt (HTTP {e.code}) {detail[:120]}")
+                  return False
+          now = int(time.time())
+          team_ok = call({"iss": iss, "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}, "Team-Schlüssel")
+          if not team_ok:
+              indiv = call({"sub": "user", "iat": now, "exp": now + 600, "aud": "appstoreconnect-v1"}, "persönlicher Schlüssel")
+              if indiv:
+                  print("⚠️ Das ist ein PERSÖNLICHER Schlüssel. Xcode braucht einen TEAM-Schlüssel (Integrationen → Team-Schlüssel, Zugriff Admin).")
+              else:
+                  print("❌ Apple lehnt den Zugang ab: Schlüssel-ID, Aussteller-ID und .p8-Datei gehören nicht zusammen – oder der Schlüssel wurde widerrufen.")
           PY
 
       - name: Archivieren und zu TestFlight hochladen
@@ -91,10 +101,14 @@ jobs:
         working-directory: ios
         run: |
           set -o pipefail
-          mkdir -p ~/.appstoreconnect/private_keys
-          KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
-          printf '%s' "$ASC_KEY_P8" > "$KEY_PATH"
-          AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY_PATH -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
+          # Eingaben von Leerzeichen/Zeilenumbrüchen befreien
+          KID=$(printf '%s' "$ASC_KEY_ID" | tr -d '[:space:]')
+          ISS=$(printf '%s' "$ASC_ISSUER_ID" | tr -d '[:space:]')
+          TEAM_ID=$(printf '%s' "$TEAM_ID" | tr -d '[:space:]')
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          KEY_PATH="$HOME/.appstoreconnect/private_keys/AuthKey_${KID}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
+          AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY_PATH -authenticationKeyID $KID -authenticationKeyIssuerID $ISS"
 
           xcodebuild archive -project KIGenC.xcodeproj -scheme KIGenC \
             -destination 'generic/platform=iOS' -archivePath build/KIGenC.xcarchive \
