@@ -58,8 +58,8 @@ jobs:
       - name: Apple-Zugang prüfen
         if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8 != ''
         run: |
-          python3 -m pip install --quiet pyjwt cryptography
-          python3 - <<'PY'
+          python3 -m venv /tmp/asc && /tmp/asc/bin/pip install --quiet pyjwt cryptography
+          /tmp/asc/bin/python - <<'PY'
           import os, time, json, urllib.request, urllib.error, jwt, re
           key = os.environ["ASC_KEY_P8"].strip()
           kid = os.environ["ASC_KEY_ID"].strip(); iss = os.environ["ASC_ISSUER_ID"].strip(); team = os.environ["TEAM_ID"].strip()
