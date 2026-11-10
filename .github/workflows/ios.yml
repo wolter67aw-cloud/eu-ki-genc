@@ -55,6 +55,37 @@ jobs:
           echo "ℹ️ Mindestens ein Apple-Wert ist unter „Variables“ statt „Secrets“ eingetragen – wird trotzdem verwendet."
           if [ "$P8_AS_VAR" = "true" ]; then echo "⚠️ Der private Schlüssel (.p8) ist als Variable öffentlich sichtbar – bitte als Secret anlegen und die Variable löschen."; fi
 
+      - name: Apple-Zugang prüfen
+        if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8 != ''
+        run: |
+          python3 -m pip install --quiet pyjwt cryptography
+          python3 - <<'PY'
+          import os, time, json, urllib.request, urllib.error, jwt, re
+          key = os.environ["ASC_KEY_P8"].strip()
+          kid = os.environ["ASC_KEY_ID"].strip(); iss = os.environ["ASC_ISSUER_ID"].strip(); team = os.environ["TEAM_ID"].strip()
+          print(f"Schlüssel-ID: {len(kid)} Zeichen ({'ok' if re.fullmatch(r'[A-Z0-9]{10}', kid) else 'UNGEWÖHNLICH – erwartet 10 Zeichen A-Z/0-9'})")
+          print(f"Aussteller-ID: {'ok' if re.fullmatch(r'[0-9a-f-]{36}', iss) else 'UNGEWÖHNLICH – erwartet UUID mit Bindestrichen'}")
+          print(f"Team-ID: {'ok' if re.fullmatch(r'[A-Z0-9]{10}', team) else 'UNGEWÖHNLICH – erwartet 10 Zeichen'}")
+          print(f".p8: BEGIN-Zeile {'vorhanden' if 'BEGIN PRIVATE KEY' in key else 'FEHLT'}, END-Zeile {'vorhanden' if 'END PRIVATE KEY' in key else 'FEHLT'}")
+          try:
+              token = jwt.encode({"iss": iss, "iat": int(time.time()), "exp": int(time.time()) + 600, "aud": "appstoreconnect-v1"},
+                                 key, algorithm="ES256", headers={"kid": kid, "typ": "JWT"})
+          except Exception as e:
+              print("❌ Die .p8-Datei ist kein gültiger privater Schlüssel:", type(e).__name__); raise SystemExit(0)
+          req = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/apps?filter[bundleId]=eu.kigenc.app",
+                                       headers={"Authorization": f"Bearer {token}"})
+          try:
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  apps = json.load(r).get("data", [])
+                  print("✅ Apple akzeptiert den API-Schlüssel.")
+                  print("✅ App eu.kigenc.app in App Store Connect gefunden." if apps else "❌ Keine App mit Bundle-ID eu.kigenc.app in App Store Connect angelegt.")
+          except urllib.error.HTTPError as e:
+              body = e.read().decode(errors="ignore")
+              try: detail = "; ".join(f"{x.get('code')}: {x.get('detail')}" for x in json.loads(body).get("errors", []))
+              except Exception: detail = body[:300]
+              print(f"❌ Apple lehnt den Zugang ab (HTTP {e.code}): {detail}")
+          PY
+
       - name: Archivieren und zu TestFlight hochladen
         if: env.ASC_KEY_ID != '' && env.TEAM_ID != '' && env.ASC_ISSUER_ID != '' && env.ASC_KEY_P8 != '' && github.ref == 'refs/heads/main'
         working-directory: ios
