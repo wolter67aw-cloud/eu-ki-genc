@@ -79,6 +79,7 @@ fun StartScreen(
 private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Tool) -> Unit) {
     val wish by vm.wish.collectAsStateWithLifecycle()
     val defining by vm.defining.collectAsStateWithLifecycle()
+    val recent by vm.recent.collectAsStateWithLifecycle()
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let {
             vm.wish.value = listOf(vm.wish.value, it).filter { s -> s.isNotBlank() }.joinToString(" ")
@@ -126,6 +127,49 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                     Spacer(Modifier.width(8.dp)); Text("Die KI ordnet deinen Wunsch ein …")
                 } else {
                     Icon(Icons.Outlined.AutoAwesome, null); Spacer(Modifier.width(8.dp)); Text("Genau definieren")
+                }
+            }
+        }
+        if (recent.isNotEmpty()) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                    Icon(Icons.Outlined.History, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(6.dp))
+                    Text("Zuletzt genutzt", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    TextButton(onClick = vm::clearRecent) { Text("Leeren") }
+                }
+            }
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    recent.forEach { r ->
+                        val c = categoryById(r.categoryId) ?: return@forEach
+                        val summary = r.content.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+                            ?: r.customPrompt?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+                        val detail = c.groups.mapNotNull { g -> r.options[g.key] }.take(2).joinToString(" · ")
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                            modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Auftrag übernehmen") { vm.useRecent(r) }
+                        ) {
+                            Row(Modifier.padding(start = 12.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(c.emoji, fontSize = 22.sp)
+                                Spacer(Modifier.width(10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        c.title + if (detail.isNotBlank()) " · $detail" else "",
+                                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    if (summary.isNotBlank()) Text(
+                                        summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
+                                IconButton(onClick = { vm.removeRecent(r) }) {
+                                    Icon(Icons.Outlined.Close, "Aus „Zuletzt genutzt“ entfernen", Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -6,6 +6,8 @@ import eu.kigenc.app.ai.ApiMessage
 import eu.kigenc.app.ai.ImageGenerator
 import eu.kigenc.app.ai.MistralClient
 import eu.kigenc.app.data.ImageUtils
+import eu.kigenc.app.data.RecentStart
+import eu.kigenc.app.data.RecentStarts
 import eu.kigenc.app.ui.tools.AiToolViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,34 @@ class StartViewModel(app: KiApp) : AiToolViewModel(app) {
     val image = MutableStateFlow<File?>(null)
     val sources = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val status = MutableStateFlow("")
+
+    /** Zuletzt ausgeführte Aufträge (Schnellwahl auf der Startseite). */
+    private val recentStore = RecentStarts(app)
+    val recent = MutableStateFlow(recentStore.list())
+
+    /** Übernimmt einen früheren Auftrag: Kategorie, Auswahl und Felder werden wiederhergestellt. */
+    fun useRecent(r: RecentStart) {
+        val cat = categoryById(r.categoryId) ?: return
+        choose(cat)
+        options.value = options.value + r.options.filter { (k, v) -> cat.groups.any { g -> g.key == k && v in g.options } }
+        extras.value = r.extras.filter { (k, v) -> v.isNotBlank() && cat.extras.any { it.key == k } }
+        content.value = r.content
+        customPrompt.value = r.customPrompt
+        note.value = ""
+    }
+
+    fun removeRecent(r: RecentStart) { recent.value = recentStore.remove(r) }
+
+    fun clearRecent() { recentStore.clear(); recent.value = emptyList() }
+
+    private fun rememberRun(cat: StartCategory) {
+        if (cat.mode == StartMode.TOOL) return
+        runCatching {
+            recent.value = recentStore.add(
+                RecentStart(cat.id, options.value, content.value, extras.value.filterValues { it.isNotBlank() }, customPrompt.value)
+            )
+        }
+    }
 
     fun choose(cat: StartCategory?) {
         category.value = cat
@@ -128,6 +158,7 @@ class StartViewModel(app: KiApp) : AiToolViewModel(app) {
             return
         }
         val prompt = builtPrompt()
+        rememberRun(cat)
         image.value = null
         sources.value = emptyList()
         when (cat.mode) {

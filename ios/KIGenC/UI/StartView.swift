@@ -108,6 +108,39 @@ let startCategories: [StartCategory] = [
     StartCategory(id: "data", emoji: "📊", title: "Daten auswerten", subtitle: "Tabellen & Statistik", mode: .tool, tool: .data),
 ]
 
+// MARK: Zuletzt genutzt
+
+/// Ein zuletzt ausgeführter Auftrag der Startseite (zum schnellen Wiederverwenden).
+struct RecentStart: Codable, Identifiable, Equatable {
+    var id = UUID()
+    let categoryId: String
+    let options: [String: String]
+    let content: String
+    let extras: [String: String]
+    let customPrompt: String?
+    var time = Date()
+
+    func sameAs(_ o: RecentStart) -> Bool {
+        categoryId == o.categoryId && options == o.options && extras == o.extras && customPrompt == o.customPrompt &&
+            content.trimmingCharacters(in: .whitespacesAndNewlines) == o.content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
+/// Speichert die letzten Aufträge (höchstens 6) in einem eigenen, neuen UserDefaults-Eintrag.
+enum RecentStartStore {
+    private static let key = "recentStarts"
+    static let max = 6
+
+    static func load() -> [RecentStart] {
+        guard let d = UserDefaults.standard.data(forKey: key) else { return [] }
+        return (try? JSONDecoder().decode([RecentStart].self, from: d)) ?? []
+    }
+
+    static func save(_ list: [RecentStart]) {
+        if let d = try? JSONEncoder().encode(list) { UserDefaults.standard.set(d, forKey: key) }
+    }
+}
+
 // MARK: Modell
 
 @MainActor
@@ -127,7 +160,36 @@ final class StartModel: ObservableObject {
     @Published var busy = false
     @Published var status = ""
     @Published var error: String?
+    @Published var recent: [RecentStart] = RecentStartStore.load()
     private var task: Task<Void, Never>?
+
+    /// Übernimmt einen früheren Auftrag: Kategorie, Auswahl und Felder werden wiederhergestellt.
+    func useRecent(_ r: RecentStart) {
+        guard let c = startCategories.first(where: { $0.id == r.categoryId }) else { return }
+        choose(c)
+        for g in c.groups { if let v = r.options[g.key], g.options.contains(v) { options[g.key] = v } }
+        for f in c.extras { if let v = r.extras[f.key], !v.isEmpty { extras[f.key] = v } }
+        content = r.content
+        customPrompt = r.customPrompt
+        note = ""
+    }
+
+    func removeRecent(_ r: RecentStart) {
+        recent.removeAll { $0.sameAs(r) }
+        RecentStartStore.save(recent)
+    }
+
+    func clearRecent() {
+        recent = []
+        RecentStartStore.save(recent)
+    }
+
+    private func rememberRun(_ c: StartCategory) {
+        guard c.mode != .tool else { return }
+        let entry = RecentStart(categoryId: c.id, options: options, content: content, extras: extras.filter { !$0.value.isEmpty }, customPrompt: customPrompt)
+        recent = Array(([entry] + recent.filter { !$0.sameAs(entry) }).prefix(RecentStartStore.max))
+        RecentStartStore.save(recent)
+    }
 
     func choose(_ c: StartCategory?) {
         category = c
@@ -202,6 +264,7 @@ final class StartModel: ObservableObject {
         guard settings.hasKey || c.mode == .image else { error = "Bitte zuerst den Mistral-Schlüssel unter „Optionen“ eintragen."; return }
         guard !content.trimmingCharacters(in: .whitespaces).isEmpty || customPrompt != nil else { error = "Bitte zuerst „\(c.contentLabel)“ ausfüllen."; return }
         let prompt = builtPrompt
+        rememberRun(c)
         result = ""; image = nil; sources = []; error = nil
         busy = true
         task = Task {
@@ -296,6 +359,7 @@ struct StartView: View {
             }
             .disabled(model.wish.trimmingCharacters(in: .whitespaces).isEmpty)
             if let e = model.error { ErrorCard(message: e) }
+            if !model.recent.isEmpty { recentSection }
             Text("Oder Schritt für Schritt").font(.subheadline.bold()).foregroundStyle(Theme.cyan).padding(.top, 4)
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(startCategories) { c in
@@ -308,6 +372,48 @@ struct StartView: View {
             }
         }
         .padding()
+    }
+
+    private var recentSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("Zuletzt genutzt", systemImage: "clock.arrow.circlepath").font(.subheadline.bold()).foregroundStyle(Theme.cyan)
+                Spacer()
+                Button("Leeren") { withAnimation { model.clearRecent() } }.font(.caption)
+            }
+            .padding(.top, 4)
+            ForEach(model.recent) { r in
+                if let c = startCategories.first(where: { $0.id == r.categoryId }) {
+                    recentRow(r, c)
+                }
+            }
+        }
+    }
+
+    private func recentRow(_ r: RecentStart, _ c: StartCategory) -> some View {
+        let firstLine = { (t: String?) -> String in t?.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.first { !$0.isEmpty } ?? "" }
+        let summary = firstLine(r.content).isEmpty ? firstLine(r.customPrompt) : firstLine(r.content)
+        let detail = c.groups.compactMap { r.options[$0.key] }.prefix(2).joined(separator: " · ")
+        return HStack(spacing: 10) {
+            Button { model.useRecent(r) } label: {
+                HStack(spacing: 10) {
+                    Text(c.emoji).font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(c.title + (detail.isEmpty ? "" : " · \(detail)")).font(.callout.bold()).foregroundStyle(Theme.text).lineLimit(1)
+                        if !summary.isEmpty { Text(summary).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1) }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .accessibilityHint("Auftrag übernehmen")
+            Button { withAnimation { model.removeRecent(r) } } label: {
+                Image(systemName: "xmark").font(.caption).foregroundStyle(Theme.secondaryText).padding(6)
+            }
+            .accessibilityLabel("Aus „Zuletzt genutzt“ entfernen")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func tile(_ c: StartCategory) -> some View {
