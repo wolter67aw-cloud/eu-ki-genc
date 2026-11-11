@@ -2,13 +2,11 @@
 
 Stand: November 2026
 
-> **Hinweis für den Anbieter:** Bitte vor der Veröffentlichung im Play Store die Angaben in eckigen Klammern ausfüllen.
-
 ## 1. Verantwortlicher
 
 Andreas Wolter
-[Straße, Hausnummer]
-[PLZ, Ort, Land]
+Pressatherstr. 28
+92676 Eschenbach, Deutschland
 E-Mail: wolter67.aw@gmail.com
 
 ## 2. Grundsatz
