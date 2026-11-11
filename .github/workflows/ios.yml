@@ -124,9 +124,10 @@ jobs:
           printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
           AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY_PATH -authenticationKeyID $KID -authenticationKeyIssuerID $ISS"
 
+          # Archiv unsigniert bauen – signiert wird beim Export mit Apples Cloud-Signatur (keine Testgeräte nötig)
           xcodebuild archive -project KIGenC.xcodeproj -scheme KIGenC \
             -destination 'generic/platform=iOS' -archivePath build/KIGenC.xcarchive \
-            DEVELOPMENT_TEAM=$TEAM_ID CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Distribution" \
+            DEVELOPMENT_TEAM=$TEAM_ID CODE_SIGN_STYLE=Automatic CODE_SIGNING_ALLOWED=NO \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             $AUTH | tail -20
 
