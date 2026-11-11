@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -136,7 +137,7 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                     Icon(Icons.Outlined.History, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(6.dp))
                     Text("Zuletzt genutzt", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
-                    TextButton(onClick = vm::clearRecent) { Text("Leeren") }
+                    if (recent.any { !it.pinned }) TextButton(onClick = vm::clearRecent) { Text("Leeren") }
                 }
             }
             item {
@@ -163,6 +164,12 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                                         summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
+                                }
+                                IconButton(onClick = { vm.togglePinRecent(r) }) {
+                                    if (r.pinned) Icon(
+                                        Icons.Filled.PushPin, "Lösen (nicht mehr angeheftet)",
+                                        Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary
+                                    ) else Icon(Icons.Outlined.PushPin, "Als Favorit anheften", Modifier.size(18.dp))
                                 }
                                 IconButton(onClick = { vm.removeRecent(r) }) {
                                     Icon(Icons.Outlined.Close, "Aus „Zuletzt genutzt“ entfernen", Modifier.size(18.dp))

@@ -119,6 +119,11 @@ struct RecentStart: Codable, Identifiable, Equatable {
     let extras: [String: String]
     let customPrompt: String?
     var time = Date()
+    /// Angeheftet (Favorit): bleibt oben und wird weder verdrängt noch von „Leeren“ entfernt.
+    /// Optional, damit ältere gespeicherte Einträge ohne dieses Feld weiter lesbar sind.
+    var pinned: Bool? = nil
+
+    var isPinned: Bool { pinned == true }
 
     func sameAs(_ o: RecentStart) -> Bool {
         categoryId == o.categoryId && options == o.options && extras == o.extras && customPrompt == o.customPrompt &&
@@ -180,14 +185,33 @@ final class StartModel: ObservableObject {
     }
 
     func clearRecent() {
-        recent = []
+        recent = recent.filter { $0.isPinned }
+        RecentStartStore.save(recent)
+    }
+
+    /// Heftet einen Auftrag an bzw. löst ihn wieder (dann wird er wieder normal einsortiert).
+    func togglePinRecent(_ r: RecentStart) {
+        guard var current = recent.first(where: { $0.sameAs(r) }) else { return }
+        let rest = recent.filter { !$0.sameAs(r) }
+        let pinnedOnes = rest.filter { $0.isPinned }
+        let others = rest.filter { !$0.isPinned }
+        if current.isPinned {
+            current.pinned = nil
+            recent = pinnedOnes + Array(([current] + others).sorted { $0.time > $1.time }.prefix(RecentStartStore.max))
+        } else {
+            current.pinned = true
+            recent = pinnedOnes + [current] + others
+        }
         RecentStartStore.save(recent)
     }
 
     private func rememberRun(_ c: StartCategory) {
         guard c.mode != .tool else { return }
         let entry = RecentStart(categoryId: c.id, options: options, content: content, extras: extras.filter { !$0.value.isEmpty }, customPrompt: customPrompt)
-        recent = Array(([entry] + recent.filter { !$0.sameAs(entry) }).prefix(RecentStartStore.max))
+        if recent.contains(where: { $0.isPinned && $0.sameAs(entry) }) { return }
+        let pinnedOnes = recent.filter { $0.isPinned }
+        let others = recent.filter { !$0.isPinned && !$0.sameAs(entry) }
+        recent = pinnedOnes + Array(([entry] + others).prefix(RecentStartStore.max))
         RecentStartStore.save(recent)
     }
 
@@ -379,7 +403,9 @@ struct StartView: View {
             HStack {
                 Label("Zuletzt genutzt", systemImage: "clock.arrow.circlepath").font(.subheadline.bold()).foregroundStyle(Theme.cyan)
                 Spacer()
-                Button("Leeren") { withAnimation { model.clearRecent() } }.font(.caption)
+                if model.recent.contains(where: { !$0.isPinned }) {
+                    Button("Leeren") { withAnimation { model.clearRecent() } }.font(.caption)
+                }
             }
             .padding(.top, 4)
             ForEach(model.recent) { r in
@@ -407,6 +433,11 @@ struct StartView: View {
                 .contentShape(Rectangle())
             }
             .accessibilityHint("Auftrag übernehmen")
+            Button { withAnimation { model.togglePinRecent(r) } } label: {
+                Image(systemName: r.isPinned ? "pin.fill" : "pin").font(.caption)
+                    .foregroundStyle(r.isPinned ? Theme.cyan : Theme.secondaryText).padding(6)
+            }
+            .accessibilityLabel(r.isPinned ? "Lösen (nicht mehr angeheftet)" : "Als Favorit anheften")
             Button { withAnimation { model.removeRecent(r) } } label: {
                 Image(systemName: "xmark").font(.caption).foregroundStyle(Theme.secondaryText).padding(6)
             }

@@ -50,7 +50,9 @@ class StartViewModel(app: KiApp) : AiToolViewModel(app) {
 
     fun removeRecent(r: RecentStart) { recent.value = recentStore.remove(r) }
 
-    fun clearRecent() { recentStore.clear(); recent.value = emptyList() }
+    fun clearRecent() { recent.value = recentStore.clear() }
+
+    fun togglePinRecent(r: RecentStart) { recent.value = recentStore.togglePin(r) }
 
     private fun rememberRun(cat: StartCategory) {
         if (cat.mode == StartMode.TOOL) return

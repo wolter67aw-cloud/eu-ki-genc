@@ -12,11 +12,14 @@ data class RecentStart(
     val extras: Map<String, String>,
     val customPrompt: String?,
     val time: Long = System.currentTimeMillis(),
+    /** Angeheftet: bleibt oben stehen und wird weder verdrängt noch von „Leeren“ entfernt. */
+    val pinned: Boolean = false,
 )
 
 /**
  * Speichert die letzten Aufträge der Startseite (höchstens [MAX]) lokal in eigenen SharedPreferences.
  * Eigenes, neues Speicherformat – bestehende Daten (Chats, Ideen, Ergebnisse, Einstellungen) bleiben unberührt.
+ * Angeheftete Aufträge (Favoriten) stehen vorne und zählen nicht zur Obergrenze [MAX].
  */
 class RecentStarts(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("recent_starts", Context.MODE_PRIVATE)
@@ -26,9 +29,27 @@ class RecentStarts(context: Context) {
         (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let(::fromJson) }
     }.getOrElse { emptyList() }
 
-    /** Fügt einen Auftrag vorne ein; gleiche Aufträge werden zusammengefasst. */
+    /** Fügt einen Auftrag vorne ein; gleiche Aufträge werden zusammengefasst. Angeheftete bleiben angeheftet. */
     fun add(entry: RecentStart): List<RecentStart> {
-        val list = (listOf(entry) + list().filterNot { it.sameAs(entry) }).take(MAX)
+        val old = list()
+        if (old.any { it.pinned && it.sameAs(entry) }) return old
+        val (pinned, others) = old.partition { it.pinned }
+        val list = pinned + (listOf(entry) + others.filterNot { it.sameAs(entry) }).take(MAX)
+        save(list)
+        return list
+    }
+
+    /** Heftet einen Auftrag an bzw. löst ihn wieder (dann wird er wieder normal einsortiert). */
+    fun togglePin(entry: RecentStart): List<RecentStart> {
+        val old = list()
+        val current = old.firstOrNull { it.sameAs(entry) } ?: return old
+        val rest = old.filterNot { it.sameAs(entry) }
+        val (pinned, others) = rest.partition { it.pinned }
+        val list = if (current.pinned) {
+            pinned + (listOf(current.copy(pinned = false)) + others).sortedByDescending { it.time }.take(MAX)
+        } else {
+            pinned + current.copy(pinned = true) + others
+        }
         save(list)
         return list
     }
@@ -39,7 +60,12 @@ class RecentStarts(context: Context) {
         return list
     }
 
-    fun clear() = prefs.edit().remove(KEY).apply()
+    /** Entfernt alle nicht angehefteten Aufträge. */
+    fun clear(): List<RecentStart> {
+        val list = list().filter { it.pinned }
+        save(list)
+        return list
+    }
 
     private fun save(list: List<RecentStart>) {
         val arr = JSONArray()
@@ -58,6 +84,7 @@ class RecentStarts(context: Context) {
         put("extras", JSONObject(r.extras))
         r.customPrompt?.let { put("prompt", it) }
         put("time", r.time)
+        if (r.pinned) put("pinned", true)
     }
 
     private fun fromJson(o: JSONObject): RecentStart? {
@@ -69,6 +96,7 @@ class RecentStarts(context: Context) {
             extras = o.optJSONObject("extras").toMap(),
             customPrompt = if (o.has("prompt")) o.optString("prompt") else null,
             time = o.optLong("time", 0L),
+            pinned = o.optBoolean("pinned", false),
         )
     }
 
