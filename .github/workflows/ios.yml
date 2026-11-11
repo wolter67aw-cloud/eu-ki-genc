@@ -67,6 +67,20 @@ jobs:
           print(f"Aussteller-ID: {'ok' if re.fullmatch(r'[0-9a-f-]{36}', iss) else 'UNGEWÖHNLICH – erwartet UUID mit Bindestrichen'}")
           print(f"Team-ID: {'ok' if re.fullmatch(r'[A-Z0-9]{10}', team) else 'UNGEWÖHNLICH – erwartet 10 Zeichen'}")
           print(f".p8: BEGIN-Zeile {'vorhanden' if 'BEGIN PRIVATE KEY' in key else 'FEHLT'}, END-Zeile {'vorhanden' if 'END PRIVATE KEY' in key else 'FEHLT'}")
+          # IDs sind keine Geheimnisse – mit Leerzeichen ausgeben, damit GitHub sie nicht als *** maskiert
+          print("Schlüssel-ID im Secret:", " ".join(kid))
+          print("Aussteller-ID im Secret:", " ".join(iss))
+          body = "".join(l for l in key.splitlines() if "PRIVATE KEY" not in l).strip()
+          print(f".p8: {len(key.splitlines())} Zeilen, Schlüsseltext {len(body)} Zeichen (üblich: 6 Zeilen, ca. 200 Zeichen)")
+          try:
+              from cryptography.hazmat.primitives.serialization import load_pem_private_key
+              import hashlib
+              pk = load_pem_private_key(key.encode(), None)
+              from cryptography.hazmat.primitives import serialization
+              pub = pk.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+              print(".p8: gültiger EC-Schlüssel, Fingerabdruck", hashlib.sha256(pub).hexdigest()[:12])
+          except Exception as e:
+              print(".p8: NICHT lesbar –", type(e).__name__)
           def call(claims, label):
               try:
                   token = jwt.encode(claims, key, algorithm="ES256", headers={"kid": kid, "typ": "JWT"})
