@@ -21,7 +21,9 @@ import subprocess
 
 PLATFORMS = {
     "android": {"tag": re.compile(r"^v1\.0\.(\d+)$"), "paths": ["app/"], "name": lambda n: f"1.0.{n}"},
-    "ios": {"tag": re.compile(r"^ios-(\d+)$"), "paths": ["ios/"], "name": lambda n: f"1.0 ({n})"},
+    # baseline: erster TestFlight-Build (50) vor Einführung der ios-N-Tags
+    "ios": {"tag": re.compile(r"^ios-(\d+)$"), "paths": ["ios/"], "name": lambda n: f"1.0 ({n})",
+            "baseline": (50, "3269694")},
 }
 
 SKIP = re.compile(r"^(Merge |Revert |Logbuch|iOS-Workflow|Workflow|CI[: ]|Docs?[: ]|Doku|README)|\[(intern|skip-notes)\]", re.I)
@@ -80,6 +82,9 @@ def main() -> None:
         m = p["tag"].match(t)
         if m and int(m.group(1)) < a.code:
             tags.append((int(m.group(1)), t))
+    base = p.get("baseline")
+    if base and base[0] < a.code and all(code != base[0] for code, _ in tags):
+        tags.append(base)
     tags.sort(reverse=True)
 
     entries = []
