@@ -6,10 +6,10 @@ Stand: November 2026
 
 ## 1. Verantwortlicher
 
-[Vor- und Nachname]
+Andreas Wolter
 [Straße, Hausnummer]
 [PLZ, Ort, Land]
-E-Mail: [Kontakt-E-Mail]
+E-Mail: wolter67.aw@gmail.com
 
 ## 2. Grundsatz
 
