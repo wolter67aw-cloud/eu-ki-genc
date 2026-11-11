@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Code auschecken
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # ganze Historie + Tags für „Was ist neu“
 
       - name: Java 21 einrichten
         uses: actions/setup-java@v6
@@ -52,6 +54,20 @@ jobs:
             echo "::warning::Secret KEYSTORE_PASSWORD fehlt – Test-Build mit Debug-Signatur, es wird KEIN Release veröffentlicht."
             echo "signed=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # „Was ist neu“: Commit-Betreffs seit dem letzten Release (nur app/) → in die App und in den Release-Text
+      - name: Neuerungen zusammenstellen
+        run: |
+          mkdir -p app/src/main/assets
+          python3 scripts/whatsnew.py --platform android --code ${{ github.run_number }} \
+            --json app/src/main/assets/whatsnew.json --markdown release-notes.md
+          {
+            cat release-notes.md
+            echo
+            echo "Testversion von KI-GenC – nur mit persönlichem Zugangscode nutzbar, gültig bis 05.12.2026."
+            echo "Installiert sich als eigene App „KI-GenC Test“ neben der normalen Version und aktualisiert sich"
+            echo "während der Testphase automatisch."
+          } > test-notes.md
 
       - name: APK bauen
         env:
@@ -85,7 +101,7 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: KI-GenC 1.0.${{ github.run_number }}
-          body: ${{ github.event.head_commit.message || 'Neuer Build' }}
+          body_path: release-notes.md
           files: |
             KI-GenC.apk
             KI-GenC-PlayStore.aab
@@ -99,10 +115,7 @@ jobs:
           tag_name: testversion
           # Die Versionsnummer am Ende des Namens nutzt die Testversion für ihre automatischen Updates.
           name: KI-GenC Testversion 1.0.${{ github.run_number }}
-          body: |
-            Testversion von KI-GenC – nur mit persönlichem Zugangscode nutzbar, gültig bis 05.12.2026.
-            Installiert sich als eigene App „KI-GenC Test“ neben der normalen Version und aktualisiert sich
-            während der Testphase automatisch.
+          body_path: test-notes.md
           files: KI-GenC-Test.apk
           prerelease: true
           make_latest: false

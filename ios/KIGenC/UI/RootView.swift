@@ -4,6 +4,7 @@ struct RootView: View {
     @EnvironmentObject private var settings: AppSettings
     @State private var tab = 5
     @State private var showOnboarding = false
+    @State private var whatsNew: [WhatsNewEntry] = []
 
     var body: some View {
         TabView(selection: $tab) {
@@ -31,11 +32,18 @@ struct RootView: View {
             UINavigationBar.appearance().standardAppearance = nav
             UINavigationBar.appearance().scrollEdgeAppearance = nav
             if !settings.onboardingDone { showOnboarding = true }
+            // „Was ist neu“ einmal nach einem Update – nicht bei einer Neuinstallation
+            whatsNew = WhatsNew.pending(freshInstall: !settings.onboardingDone)
             refreshModelsIfNeeded()
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { settings.onboardingDone = true; showOnboarding = false; if !settings.hasKey { tab = 4 } }
                 .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: Binding(get: { !whatsNew.isEmpty && !showOnboarding },
+                                    set: { if !$0 { WhatsNew.markSeen(); whatsNew = [] } })) {
+            WhatsNewView(entries: whatsNew) { WhatsNew.markSeen(); whatsNew = [] }
+                .presentationDetents([.medium, .large])
         }
     }
 }

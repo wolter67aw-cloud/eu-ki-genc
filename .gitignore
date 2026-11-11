@@ -11,3 +11,7 @@
 .cxx/
 *.apk
 *.aab
+
+# „Was ist neu“ – wird beim Build aus der Git-Historie erzeugt
+app/src/main/assets/whatsnew.json
+ios/KIGenC/whatsnew.json

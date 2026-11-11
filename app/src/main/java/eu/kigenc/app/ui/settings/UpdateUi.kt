@@ -5,9 +5,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -21,6 +23,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import eu.kigenc.app.update.UpdateInfo
 import eu.kigenc.app.update.UpdateState
+import eu.kigenc.app.update.WhatsNew
+import eu.kigenc.app.update.WhatsNewEntry
 
 /** Dialog für ein verfügbares Update inkl. Download-Fortschritt. */
 @Composable
@@ -64,7 +68,7 @@ fun UpdateDialog(
                             Spacer(Modifier.height(12.dp))
                             Text("Neu:", style = MaterialTheme.typography.labelLarge)
                             Text(
-                                info.notes,
+                                WhatsNew.pretty(info.notes),
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier
                                     .heightIn(max = 180.dp)
@@ -96,5 +100,44 @@ fun UpdateDialog(
                 else -> {}
             }
         }
+    )
+}
+
+/** „Was ist neu“ – nach einem Update einmalig oder jederzeit unter Optionen → Updates. */
+@Composable
+fun WhatsNewDialog(entries: List<WhatsNewEntry>, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Outlined.NewReleases, null) },
+        title = {
+            Text(
+                if (entries.size == 1) "Neu in Version ${entries.first().version}" else "Das ist neu"
+            )
+        },
+        text = {
+            Column(
+                Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                if (entries.isEmpty()) {
+                    Text("Für diese Version liegt keine Liste der Neuerungen vor.")
+                }
+                entries.forEachIndexed { index, e ->
+                    if (index > 0) Spacer(Modifier.height(14.dp))
+                    if (entries.size > 1) {
+                        Text("Version ${e.version}", style = MaterialTheme.typography.titleSmall)
+                    }
+                    if (e.date.isNotBlank()) {
+                        Text(e.date, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    e.items.forEach { item ->
+                        Text("• $item", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onDismiss) { Text("Alles klar") } },
     )
 }

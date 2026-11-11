@@ -19,6 +19,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -61,6 +63,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.outlined.NewReleases
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -116,6 +119,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     var confirmDelete by remember { mutableStateOf(false) }
     var showImageProvider by remember { mutableStateOf(false) }
     var showLog by remember { mutableStateOf(false) }
+    var showWhatsNew by remember { mutableStateOf(false) }
     var busyBackup by remember { mutableStateOf<String?>(null) }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -354,6 +358,11 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                             color = if (updateState is UpdateState.Failed) MaterialTheme.colorScheme.error
                             else MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                    TextButton(onClick = { showWhatsNew = true }, contentPadding = PaddingValues(0.dp)) {
+                        Icon(Icons.Outlined.NewReleases, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Was ist neu?")
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
@@ -599,6 +608,9 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
         )
     }
 
+    if (showWhatsNew) {
+        WhatsNewDialog(eu.kigenc.app.update.WhatsNew.all(context)) { showWhatsNew = false }
+    }
     if (showLog) {
         var logText by remember { mutableStateOf(ErrorLog.read()) }
         AlertDialog(

@@ -193,6 +193,14 @@ fun MainScreen(
         is UpdateState.Downloading, is UpdateState.Installing, is UpdateState.NeedsPermission -> true
         else -> false
     }
+    // „Was ist neu“ einmal nach einem Update (nicht bei Neuinstallation, nicht über anderen Dialogen)
+    var whatsNew by remember { mutableStateOf(eu.kigenc.app.update.WhatsNew.pending(context)) }
+    if (whatsNew.isNotEmpty() && !showOnboarding && !showUpdateDialog) {
+        eu.kigenc.app.ui.settings.WhatsNewDialog(whatsNew) {
+            eu.kigenc.app.update.WhatsNew.markSeen(context)
+            whatsNew = emptyList()
+        }
+    }
     if (showUpdateDialog) {
         UpdateDialog(
             state = updateState,

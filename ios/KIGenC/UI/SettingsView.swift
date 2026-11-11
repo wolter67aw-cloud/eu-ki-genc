@@ -7,6 +7,7 @@ struct SettingsView: View {
     @State private var testStatus: String?
     @State private var testing = false
     @State private var showLog = false
+    @State private var showWhatsNew = false
     @State private var confirmDelete = false
 
     private var version: String {
@@ -92,6 +93,7 @@ struct SettingsView: View {
 
                 Section {
                     LabeledContent("Version", value: version)
+                    Button { showWhatsNew = true } label: { Label("Was ist neu?", systemImage: "sparkles") }
                     LabeledContent("KI-Anbieter", value: "Mistral AI (Paris, EU)")
                 }
                 .listRowBackground(Theme.card)
@@ -107,6 +109,7 @@ struct SettingsView: View {
                 }
             }
             .sheet(isPresented: $showLog) { LogView() }
+            .sheet(isPresented: $showWhatsNew) { WhatsNewView(entries: WhatsNew.all()) { showWhatsNew = false } }
         }
     }
 
