@@ -122,6 +122,9 @@ struct RecentStart: Codable, Identifiable, Equatable {
     /// Angeheftet (Favorit): bleibt oben und wird weder verdrängt noch von „Leeren“ entfernt.
     /// Optional, damit ältere gespeicherte Einträge ohne dieses Feld weiter lesbar sind.
     var pinned: Bool? = nil
+    /// Eigener Name (z. B. für Favoriten); nil = erste Zeile des Inhalts wird angezeigt.
+    /// Optional, damit ältere gespeicherte Einträge ohne dieses Feld weiter lesbar sind.
+    var name: String? = nil
 
     var isPinned: Bool { pinned == true }
 
@@ -135,6 +138,7 @@ struct RecentStart: Codable, Identifiable, Equatable {
 enum RecentStartStore {
     private static let key = "recentStarts"
     static let max = 6
+    static let maxName = 60
 
     static func load() -> [RecentStart] {
         guard let d = UserDefaults.standard.data(forKey: key) else { return [] }
@@ -205,10 +209,18 @@ final class StartModel: ObservableObject {
         RecentStartStore.save(recent)
     }
 
+    /// Gibt einem Auftrag einen eigenen Namen; ein leerer Name stellt die automatische Anzeige wieder her.
+    func renameRecent(_ r: RecentStart, to name: String) {
+        let clean = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(RecentStartStore.maxName))
+        for i in recent.indices where recent[i].sameAs(r) { recent[i].name = clean.isEmpty ? nil : clean }
+        RecentStartStore.save(recent)
+    }
+
     private func rememberRun(_ c: StartCategory) {
         guard c.mode != .tool else { return }
-        let entry = RecentStart(categoryId: c.id, options: options, content: content, extras: extras.filter { !$0.value.isEmpty }, customPrompt: customPrompt)
+        var entry = RecentStart(categoryId: c.id, options: options, content: content, extras: extras.filter { !$0.value.isEmpty }, customPrompt: customPrompt)
         if recent.contains(where: { $0.isPinned && $0.sameAs(entry) }) { return }
+        entry.name = recent.first(where: { $0.sameAs(entry) })?.name
         let pinnedOnes = recent.filter { $0.isPinned }
         let others = recent.filter { !$0.isPinned && !$0.sameAs(entry) }
         recent = pinnedOnes + Array(([entry] + others).prefix(RecentStartStore.max))
@@ -338,6 +350,8 @@ struct StartView: View {
     @StateObject private var model = StartModel()
     @StateObject private var dictation = Dictation()
     @State private var showPrompt = false
+    @State private var renaming: RecentStart?
+    @State private var renameText = ""
 
     var body: some View {
         NavigationStack {
@@ -346,6 +360,16 @@ struct StartView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.backgroundGradient.ignoresSafeArea())
+            .alert("Favorit umbenennen", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Name", text: $renameText)
+                Button("Speichern") {
+                    if let r = renaming { model.renameRecent(r, to: renameText) }
+                    renaming = nil
+                }
+                Button("Abbrechen", role: .cancel) { renaming = nil }
+            } message: {
+                Text("Leer lassen, um wieder die erste Zeile des Auftrags anzuzeigen.")
+            }
             .navigationTitle(model.category.map { "\($0.emoji) \($0.title)" } ?? "Start")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -425,14 +449,28 @@ struct StartView: View {
                 HStack(spacing: 10) {
                     Text(c.emoji).font(.title3)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(c.title + (detail.isEmpty ? "" : " · \(detail)")).font(.callout.bold()).foregroundStyle(Theme.text).lineLimit(1)
-                        if !summary.isEmpty { Text(summary).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1) }
+                        if let name = r.name {
+                            Text(name).font(.callout.bold()).foregroundStyle(Theme.text).lineLimit(1)
+                            Text(c.title + (detail.isEmpty ? "" : " · \(detail)")).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1)
+                        } else {
+                            Text(c.title + (detail.isEmpty ? "" : " · \(detail)")).font(.callout.bold()).foregroundStyle(Theme.text).lineLimit(1)
+                            if !summary.isEmpty { Text(summary).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1) }
+                        }
                     }
                     Spacer(minLength: 0)
                 }
                 .contentShape(Rectangle())
             }
             .accessibilityHint("Auftrag übernehmen")
+            if r.isPinned {
+                Button {
+                    renameText = r.name ?? String(summary.prefix(RecentStartStore.maxName))
+                    renaming = r
+                } label: {
+                    Image(systemName: "pencil").font(.caption).foregroundStyle(Theme.secondaryText).padding(6)
+                }
+                .accessibilityLabel("Favorit umbenennen")
+            }
             Button { withAnimation { model.togglePinRecent(r) } } label: {
                 Image(systemName: r.isPinned ? "pin.fill" : "pin").font(.caption)
                     .foregroundStyle(r.isPinned ? Theme.cyan : Theme.secondaryText).padding(6)

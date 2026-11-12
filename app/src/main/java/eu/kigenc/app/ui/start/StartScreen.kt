@@ -81,6 +81,8 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
     val wish by vm.wish.collectAsStateWithLifecycle()
     val defining by vm.defining.collectAsStateWithLifecycle()
     val recent by vm.recent.collectAsStateWithLifecycle()
+    var renaming by remember { mutableStateOf<eu.kigenc.app.data.RecentStart?>(null) }
+    var renameText by remember { mutableStateOf("") }
     val speech = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
         res.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.let {
             vm.wish.value = listOf(vm.wish.value, it).filter { s -> s.isNotBlank() }.joinToString(" ")
@@ -155,15 +157,26 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                                 Text(c.emoji, fontSize = 22.sp)
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
-                                    Text(
+                                    if (r.name != null) Text(
+                                        r.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    if (r.name == null) Text(
                                         c.title + if (detail.isNotBlank()) " · $detail" else "",
                                         style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
-                                    if (summary.isNotBlank()) Text(
+                                    if (r.name != null) Text(
+                                        c.title + if (detail.isNotBlank()) " · $detail" else "",
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    ) else if (summary.isNotBlank()) Text(
                                         summary, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
+                                }
+                                if (r.pinned) IconButton(onClick = { renaming = r; renameText = r.name ?: summary.take(eu.kigenc.app.data.RecentStarts.MAX_NAME) }) {
+                                    Icon(Icons.Outlined.Edit, "Favorit umbenennen", Modifier.size(18.dp))
                                 }
                                 IconButton(onClick = { vm.togglePinRecent(r) }) {
                                     if (r.pinned) Icon(
@@ -207,6 +220,28 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                 }
             }
         }
+    }
+    renaming?.let { r ->
+        AlertDialog(
+            onDismissRequest = { renaming = null },
+            title = { Text("Favorit umbenennen") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = renameText,
+                        onValueChange = { renameText = it.take(eu.kigenc.app.data.RecentStarts.MAX_NAME) },
+                        singleLine = true, label = { Text("Name") }, modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Leer lassen, um wieder die erste Zeile des Auftrags anzuzeigen.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { vm.renameRecent(r, renameText); renaming = null }) { Text("Speichern") } },
+            dismissButton = { TextButton(onClick = { renaming = null }) { Text("Abbrechen") } }
+        )
     }
 }
 

@@ -54,6 +54,8 @@ class StartViewModel(app: KiApp) : AiToolViewModel(app) {
 
     fun togglePinRecent(r: RecentStart) { recent.value = recentStore.togglePin(r) }
 
+    fun renameRecent(r: RecentStart, name: String) { recent.value = recentStore.rename(r, name) }
+
     private fun rememberRun(cat: StartCategory) {
         if (cat.mode == StartMode.TOOL) return
         runCatching {

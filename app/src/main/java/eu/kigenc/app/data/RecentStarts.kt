@@ -14,6 +14,8 @@ data class RecentStart(
     val time: Long = System.currentTimeMillis(),
     /** Angeheftet: bleibt oben stehen und wird weder verdrängt noch von „Leeren“ entfernt. */
     val pinned: Boolean = false,
+    /** Eigener Name (z. B. für Favoriten); leer = erste Zeile des Inhalts wird angezeigt. */
+    val name: String? = null,
 )
 
 /**
@@ -34,7 +36,8 @@ class RecentStarts(context: Context) {
         val old = list()
         if (old.any { it.pinned && it.sameAs(entry) }) return old
         val (pinned, others) = old.partition { it.pinned }
-        val list = pinned + (listOf(entry) + others.filterNot { it.sameAs(entry) }).take(MAX)
+        val keptName = entry.name ?: others.firstOrNull { it.sameAs(entry) }?.name
+        val list = pinned + (listOf(entry.copy(name = keptName)) + others.filterNot { it.sameAs(entry) }).take(MAX)
         save(list)
         return list
     }
@@ -50,6 +53,14 @@ class RecentStarts(context: Context) {
         } else {
             pinned + current.copy(pinned = true) + others
         }
+        save(list)
+        return list
+    }
+
+    /** Gibt einem Auftrag einen eigenen Namen; ein leerer Name stellt die automatische Anzeige wieder her. */
+    fun rename(entry: RecentStart, name: String): List<RecentStart> {
+        val clean = name.trim().take(MAX_NAME).ifBlank { null }
+        val list = list().map { if (it.sameAs(entry)) it.copy(name = clean) else it }
         save(list)
         return list
     }
@@ -85,6 +96,7 @@ class RecentStarts(context: Context) {
         r.customPrompt?.let { put("prompt", it) }
         put("time", r.time)
         if (r.pinned) put("pinned", true)
+        r.name?.let { put("name", it) }
     }
 
     private fun fromJson(o: JSONObject): RecentStart? {
@@ -97,6 +109,7 @@ class RecentStarts(context: Context) {
             customPrompt = if (o.has("prompt")) o.optString("prompt") else null,
             time = o.optLong("time", 0L),
             pinned = o.optBoolean("pinned", false),
+            name = o.optString("name").trim().ifBlank { null },
         )
     }
 
@@ -107,6 +120,7 @@ class RecentStarts(context: Context) {
 
     companion object {
         const val MAX = 6
+        const val MAX_NAME = 60
         private const val KEY = "items"
     }
 }
