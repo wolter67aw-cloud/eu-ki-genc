@@ -108,15 +108,25 @@ def main() -> int:
             print(f"ℹ️ Gruppe „{a.group}“ nicht gefunden – Build nicht verteilt.")
         else:
             # Direkt nach der Verarbeitung kennt die Gruppen-Schnittstelle den Build manchmal noch nicht (404) – nochmal versuchen
-            for attempt in range(12):
+            try:
+                detail = call("GET", f"/builds/{bid}/buildBetaDetail")["data"]["attributes"]
+                print(f"ℹ️ Status Build {a.build}: intern {detail.get('internalBuildState')}, extern {detail.get('externalBuildState')}")
+            except Exception as e:
+                print("ℹ️ Build-Status nicht lesbar:", e)
+            for attempt in range(6):
                 try:
-                    call("POST", f"/betaGroups/{group['id']}/relationships/builds",
-                         {"data": [{"type": "builds", "id": bid}]})
+                    try:
+                        call("POST", f"/betaGroups/{group['id']}/relationships/builds",
+                             {"data": [{"type": "builds", "id": bid}]})
+                    except RuntimeError:
+                        # gleicher Vorgang über den Build statt über die Gruppe
+                        call("POST", f"/builds/{bid}/relationships/betaGroups",
+                             {"data": [{"type": "betaGroups", "id": group["id"]}]})
                     break
                 except RuntimeError as e:
-                    if "HTTP 404" not in str(e) or attempt == 11:
+                    if attempt == 5:
                         raise
-                    print("… Build für die Gruppe noch nicht bereit, warte 30 s")
+                    print("… Build für die Gruppe noch nicht bereit, warte 30 s:", str(e)[:160])
                     time.sleep(30)
             print(f"✅ Build der Gruppe „{a.group}“ hinzugefügt.")
             if not group["attributes"].get("isInternalGroup"):
