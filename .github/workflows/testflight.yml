@@ -1,0 +1,29 @@
+# Einen vorhandenen TestFlight-Build nachträglich an die Tester verteilen
+# („Was testen“ eintragen, Gruppe „Tester“, Beta-Prüfung). Start: Actions → TestFlight verteilen → Run workflow.
+name: TestFlight verteilen
+
+on:
+  workflow_dispatch:
+    inputs:
+      build:
+        description: "Build-Nummer (z. B. 56)"
+        required: true
+
+jobs:
+  verteilen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID || vars.APP_STORE_CONNECT_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || vars.APP_STORE_CONNECT_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.APP_STORE_CONNECT_KEY_P8 || vars.APP_STORE_CONNECT_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Neuerungen
+        run: python3 scripts/whatsnew.py --platform ios --code ${{ inputs.build }} --plain testflight-notes.txt
+      - name: Verteilen
+        run: |
+          python3 -m venv /tmp/asc && /tmp/asc/bin/pip install --quiet pyjwt cryptography
+          /tmp/asc/bin/python scripts/testflight_publish.py --build ${{ inputs.build }} --notes testflight-notes.txt --group Tester

@@ -107,8 +107,17 @@ def main() -> int:
         if group is None:
             print(f"ℹ️ Gruppe „{a.group}“ nicht gefunden – Build nicht verteilt.")
         else:
-            call("POST", f"/betaGroups/{group['id']}/relationships/builds",
-                 {"data": [{"type": "builds", "id": bid}]})
+            # Direkt nach der Verarbeitung kennt die Gruppen-Schnittstelle den Build manchmal noch nicht (404) – nochmal versuchen
+            for attempt in range(12):
+                try:
+                    call("POST", f"/betaGroups/{group['id']}/relationships/builds",
+                         {"data": [{"type": "builds", "id": bid}]})
+                    break
+                except RuntimeError as e:
+                    if "HTTP 404" not in str(e) or attempt == 11:
+                        raise
+                    print("… Build für die Gruppe noch nicht bereit, warte 30 s")
+                    time.sleep(30)
             print(f"✅ Build der Gruppe „{a.group}“ hinzugefügt.")
             if not group["attributes"].get("isInternalGroup"):
                 try:
