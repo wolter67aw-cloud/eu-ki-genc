@@ -62,9 +62,13 @@ object Beta {
             .joinToString("") { "%02x".format(it) }
 
     fun normalize(input: String): String {
-        val raw = input.uppercase().filter { it.isLetterOrDigit() }
-        val body = raw.removePrefix("KIG")
-        return if (body.length == 8) "KIG-${body.take(4)}-${body.drop(4)}" else input.trim().uppercase()
+        // Präfix „KIG“ optional und großzügig erkannt (z. B. „KG“, „K1G“), falls das I Probleme macht
+        val raw = input.uppercase().filter { it.isLetterOrDigit() && it.code < 128 }
+        if (raw.length !in 8..11) return input.trim().uppercase()
+        val prefix = raw.dropLast(8)
+        if (prefix.isNotEmpty() && !prefix.startsWith("K") && !prefix.endsWith("G")) return input.trim().uppercase()
+        val body = raw.takeLast(8)
+        return "KIG-${body.take(4)}-${body.drop(4)}"
     }
 
     fun isValid(code: String): Boolean =

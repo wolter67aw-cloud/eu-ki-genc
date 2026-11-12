@@ -27,10 +27,15 @@ enum Beta {
     }
 
     static func normalize(_ input: String) -> String {
-        let raw = input.uppercased().filter { $0.isLetter || $0.isNumber }
-        var body = raw
-        if body.hasPrefix("KIG") { body.removeFirst(3) }
-        guard body.count == 8 else { return input.trimmingCharacters(in: .whitespaces).uppercased() }
+        // Nur Buchstaben/Ziffern; das Präfix „KIG“ ist optional und wird großzügig erkannt
+        // (z. B. „KG“, „K1G“, „KLG“), falls sich das I nicht eintippen lässt.
+        let raw = Array(input.uppercased().filter { ($0.isLetter || $0.isNumber) && $0.isASCII })
+        guard (8...11).contains(raw.count) else { return input.trimmingCharacters(in: .whitespaces).uppercased() }
+        let prefix = String(raw.dropLast(8))
+        guard prefix.isEmpty || prefix.hasPrefix("K") || prefix.hasSuffix("G") else {
+            return input.trimmingCharacters(in: .whitespaces).uppercased()
+        }
+        let body = String(raw.suffix(8))
         return "KIG-\(body.prefix(4))-\(body.suffix(4))"
     }
 

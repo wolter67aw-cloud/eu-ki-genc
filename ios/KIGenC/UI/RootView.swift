@@ -142,13 +142,19 @@ struct BetaGateView<Content: View>: View {
                 Text("KI-GenC Testversion").font(.title.bold())
                 Text("Bitte gib deinen persönlichen Zugangscode ein. Gültig bis \(Beta.expiryText).")
                     .multilineTextAlignment(.center).foregroundStyle(Theme.secondaryText)
-                TextField("KIG-XXXX-XXXX", text: $code)
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    .font(.title3.monospaced())
-                    .multilineTextAlignment(.center)
-                    .padding(12)
-                    .background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 12))
+                // „KIG-“ steht fest davor – getippt werden nur die 8 Zeichen dahinter
+                HStack(spacing: 4) {
+                    Text("KIG-").font(.title3.monospaced()).foregroundStyle(Theme.secondaryText)
+                    TextField("XXXX-XXXX", text: $code)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                        .keyboardType(.asciiCapable)
+                        .font(.title3.monospaced())
+                }
+                .padding(12)
+                .background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 12))
+                Text("Nur die 8 Zeichen nach „KIG-“ eingeben, z. B. ABCD-1234.")
+                    .font(.footnote).foregroundStyle(Theme.secondaryText)
                 if let error { Text(error).foregroundStyle(.orange).font(.callout) }
                 GradientButton(title: "Freischalten", icon: "lock.open") {
                     if Beta.isValid(code) {
