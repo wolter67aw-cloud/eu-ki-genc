@@ -27,7 +27,8 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - Widgets (Android-Startbildschirm) für Schnellerfassung
 - Barrierefreiheit: größere Schrift, TalkBack/VoiceOver-Beschriftungen prüfen
 - Angeheftete Aufträge per Ziehen umsortieren
-- Chat: Unterhaltungen durchsuchen (Volltext über alle gespeicherten Chats)
+- Chat-Verlauf: Antippen eines Suchtreffers springt direkt zur gefundenen Nachricht (statt Chat-Anfang)
+- Chat-Verlauf nach Zeitraum gruppieren (Heute, Gestern, Diese Woche, Älter)
 - Android: App-Shortcuts (langes Drücken aufs Symbol) für angeheftete Aufträge
 
 ## Logbuch
@@ -39,3 +40,4 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - 11.11.2026 (v1.0.57): Secret KEYSTORE_PASSWORD wiederhergestellt – Release 1.0.57 veröffentlicht (enthält Favoriten und „Was ist neu“).
 - 12.11.2026 (v1.0.61): Angeheftete Favoriten auf der Startseite lassen sich umbenennen (Stift-Symbol → eigener Name, max. 60 Zeichen; leer = wieder erste Zeile des Auftrags). Der Name bleibt beim Lösen/erneuten Ausführen erhalten. Speicher abwärtskompatibel (neues optionales Feld „name“ in recent_starts bzw. recentStarts). Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
 - 12.11.2026: Zugangscode – iOS-Tester konnten das I in „KIG“ nicht eintippen. „KIG-“ jetzt fest vorgegeben, nur 8 Zeichen eingeben; Präfix auf beiden Plattformen optional/tolerant (KG, K1G …). Build 56. Neuer Workflow „TestFlight verteilen“ (manuell, Build-Nr.) und Wiederholung beim Zuordnen zur Gruppe.
+- 13.11.2026 (v1.0.66): Chat-Verlauf durchsuchen – Treffer zeigen jetzt die Fundstelle (Ausschnitt mit hervorgehobenem Suchbegriff, „Du:“/„KI:“, Trefferanzahl) und oben „N Unterhaltungen gefunden“. iOS bekommt die Volltextsuche im Verlauf neu (Titel + alle Nachrichten; Wischen-Löschen arbeitet auf der gefilterten Liste). Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
