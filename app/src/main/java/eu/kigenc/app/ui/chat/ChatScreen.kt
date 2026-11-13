@@ -97,6 +97,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -343,15 +347,40 @@ fun ChatScreen(
                     modifier = Modifier.padding(24.dp)
                 )
             }
+            val highlight = SpanStyle(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                background = MaterialTheme.colorScheme.primaryContainer
+            )
+            if (historyQuery.isNotBlank() && filtered.isNotEmpty()) {
+                Text(
+                    if (filtered.size == 1) "1 Unterhaltung gefunden" else "${filtered.size} Unterhaltungen gefunden",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
+                )
+            }
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
                 items(filtered, key = { it.id }) { conv ->
                     ListItem(
                         headlineContent = { Text(conv.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         supportingContent = {
-                            Text(
-                                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
-                                    " · " + conv.model
-                            )
+                            Column {
+                                Text(
+                                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
+                                        " · " + conv.model
+                                )
+                                val hit = remember(conv, historyQuery) { historySnippet(conv, historyQuery.trim(), highlight) }
+                                if (hit != null) {
+                                    Text(
+                                        hit,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
+                            }
                         },
                         trailingContent = {
                             Row {
@@ -670,5 +699,34 @@ private fun InputBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * Fundstelle für die Verlaufssuche: Ausschnitt rund um den ersten Treffer in den Nachrichten,
+ * Suchbegriff hervorgehoben. Null, wenn nichts gesucht wird oder nur der Titel passt.
+ */
+private fun historySnippet(conv: Conversation, query: String, highlight: SpanStyle): AnnotatedString? {
+    if (query.isEmpty()) return null
+    val msg = conv.messages.firstOrNull { it.text.contains(query, ignoreCase = true) } ?: return null
+    val text = msg.text.replace(Regex("\\s+"), " ").trim()
+    val idx = text.indexOf(query, ignoreCase = true)
+    if (idx < 0) return null
+    val start = (idx - 40).coerceAtLeast(0)
+    val end = (idx + query.length + 80).coerceAtMost(text.length)
+    val hits = conv.messages.sumOf { m ->
+        var n = 0
+        var i = m.text.indexOf(query, ignoreCase = true)
+        while (i >= 0) { n++; i = m.text.indexOf(query, i + query.length, ignoreCase = true) }
+        n
+    }
+    return buildAnnotatedString {
+        if (msg.role == Role.USER) append("Du: ") else append("KI: ")
+        if (start > 0) append("…")
+        append(text.substring(start, idx))
+        withStyle(highlight) { append(text.substring(idx, idx + query.length)) }
+        append(text.substring(idx + query.length, end))
+        if (end < text.length) append("…")
+        if (hits > 1) append("  ($hits Treffer)")
     }
 }

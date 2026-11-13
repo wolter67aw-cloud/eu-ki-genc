@@ -68,6 +68,7 @@ struct ChatView: View {
     @StateObject private var dictation = Dictation()
     @ObservedObject private var store = ConversationStore.shared
     @State private var showHistory = false
+    @State private var historyQuery = ""
     @State private var showAttach = false
     @FocusState private var focused: Bool
 
@@ -183,13 +184,30 @@ struct ChatView: View {
         .disabled(!settings.hasKey)
     }
 
+    /// Volltextsuche über Titel und alle Nachrichten der gespeicherten Chats.
+    private var filteredHistory: [Conversation] {
+        let q = historyQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return store.conversations }
+        return store.conversations.filter { c in
+            c.title.localizedCaseInsensitiveContains(q) || c.messages.contains { $0.text.localizedCaseInsensitiveContains(q) }
+        }
+    }
+
     private var history: some View {
         NavigationStack {
             List {
+                let list = filteredHistory
+                let q = historyQuery.trimmingCharacters(in: .whitespacesAndNewlines)
                 if store.conversations.isEmpty {
                     Text("Noch keine gespeicherten Chats.").foregroundStyle(Theme.secondaryText)
+                } else if list.isEmpty {
+                    Text("Nichts gefunden.").foregroundStyle(Theme.secondaryText)
+                } else if !q.isEmpty {
+                    Text(list.count == 1 ? "1 Unterhaltung gefunden" : "\(list.count) Unterhaltungen gefunden")
+                        .font(.caption).foregroundStyle(Theme.secondaryText)
+                        .listRowBackground(Color.clear)
                 }
-                ForEach(store.conversations) { c in
+                ForEach(list) { c in
                     Button {
                         model.stop()
                         model.conversation = c
@@ -198,13 +216,17 @@ struct ChatView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
                             Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
+                            if let hit = Self.snippet(in: c, query: q) {
+                                Text(hit).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
+                            }
                         }
                     }
                     .listRowBackground(Theme.card)
                 }
-                .onDelete { idx in idx.map { store.conversations[$0].id }.forEach(store.delete) }
+                .onDelete { idx in idx.map { list[$0].id }.forEach(store.delete) }
             }
             .clearListBackground()
+            .searchable(text: $historyQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Verlauf durchsuchen …")
             .navigationTitle("Verlauf")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("Fertig") { showHistory = false } }
@@ -212,6 +234,33 @@ struct ChatView: View {
             }
         }
         .preferredColorScheme(Theme.current.dark ? .dark : .light)
+    }
+
+    /// Ausschnitt rund um den ersten Treffer in den Nachrichten, Suchbegriff hervorgehoben.
+    static func snippet(in c: Conversation, query: String) -> AttributedString? {
+        guard !query.isEmpty,
+              let msg = c.messages.first(where: { $0.text.localizedCaseInsensitiveContains(query) }) else { return nil }
+        let text = msg.text.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).joined(separator: " ")
+        guard let r = text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { return nil }
+        let start = text.index(r.lowerBound, offsetBy: -40, limitedBy: text.startIndex) ?? text.startIndex
+        let end = text.index(r.upperBound, offsetBy: 80, limitedBy: text.endIndex) ?? text.endIndex
+        var hits = 0
+        for m in c.messages {
+            var from = m.text.startIndex
+            while let f = m.text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive], range: from..<m.text.endIndex) {
+                hits += 1
+                from = f.upperBound
+            }
+        }
+        var out = AttributedString((msg.role == "user" ? "Du: " : "KI: ") + (start > text.startIndex ? "…" : ""))
+        out += AttributedString(String(text[start..<r.lowerBound]))
+        var match = AttributedString(String(text[r]))
+        match.font = .caption.bold()
+        match.foregroundColor = Theme.cyan
+        out += match
+        out += AttributedString(String(text[r.upperBound..<end]) + (end < text.endIndex ? "…" : ""))
+        if hits > 1 { out += AttributedString("  (\(hits) Treffer)") }
+        return out
     }
 }
 
