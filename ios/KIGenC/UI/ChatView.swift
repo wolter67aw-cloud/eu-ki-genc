@@ -69,6 +69,9 @@ struct ChatView: View {
     @ObservedObject private var store = ConversationStore.shared
     @State private var showHistory = false
     @State private var historyQuery = ""
+    /// Sprung aus der Verlaufssuche: Ziel-Nachricht und kurz hervorgehobene Nachricht.
+    @State private var jumpTo: UUID?
+    @State private var flashID: UUID?
     @State private var showAttach = false
     @FocusState private var focused: Bool
 
@@ -132,6 +135,8 @@ struct ChatView: View {
                 LazyVStack(spacing: 12) {
                     ForEach(model.conversation.messages) { m in
                         MessageRow(message: m, busy: model.busy && m.id == model.conversation.messages.last?.id)
+                            .background(flashID == m.id ? Theme.cyan.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 18))
+                            .animation(.easeInOut(duration: 0.5), value: flashID)
                             .id(m.id)
                     }
                     Color.clear.frame(height: 1).id("bottom")
@@ -140,7 +145,21 @@ struct ChatView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .onChange(of: model.conversation.messages.last?.text) { _, _ in
+                guard jumpTo == nil else { return }
                 proxy.scrollTo("bottom", anchor: .bottom)
+            }
+            .task(id: jumpTo) {
+                // Gefundene Nachricht aus der Verlaufssuche anspringen und kurz hervorheben
+                guard let target = jumpTo else { return }
+                try? await Task.sleep(nanoseconds: 350_000_000)
+                withAnimation { proxy.scrollTo(target, anchor: .top) }
+                flashID = target
+                jumpTo = nil
+            }
+            .task(id: flashID) {
+                guard flashID != nil else { return }
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if !Task.isCancelled { flashID = nil }
             }
         }
     }
@@ -210,6 +229,8 @@ struct ChatView: View {
                 ForEach(list) { c in
                     Button {
                         model.stop()
+                        // Bei aktiver Suche direkt zur ersten Fundstelle springen
+                        jumpTo = q.isEmpty ? nil : c.messages.first(where: { $0.text.localizedCaseInsensitiveContains(q) })?.id
                         model.conversation = c
                         showHistory = false
                     } label: {

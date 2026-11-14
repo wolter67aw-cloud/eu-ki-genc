@@ -20,6 +20,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -91,7 +93,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.delay
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
@@ -144,6 +149,9 @@ fun ChatScreen(
     var renaming by remember { mutableStateOf<Conversation?>(null) }
     var renameText by remember { mutableStateOf("") }
     var historyQuery by remember { mutableStateOf("") }
+    // Sprung aus der Verlaufssuche: Ziel-Nachricht und kurz hervorgehobene Nachricht
+    var jumpTo by remember { mutableStateOf<String?>(null) }
+    var flashId by remember { mutableStateOf<String?>(null) }
     var reporting by remember { mutableStateOf<String?>(null) }
     val isCode = vm.mode == ChatMode.CODE
 
@@ -205,7 +213,22 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val lastLength = messages.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex, Int.MAX_VALUE / 2)
+        if (messages.isNotEmpty() && jumpTo == null) listState.animateScrollToItem(messages.lastIndex, Int.MAX_VALUE / 2)
+    }
+    LaunchedEffect(jumpTo, state.current?.id) {
+        val target = jumpTo ?: return@LaunchedEffect
+        val idx = messages.indexOfFirst { it.id == target }
+        if (idx >= 0) {
+            listState.scrollToItem(idx)
+            flashId = target
+        }
+        jumpTo = null
+    }
+    LaunchedEffect(flashId) {
+        if (flashId != null) {
+            delay(2500)
+            flashId = null
+        }
     }
     LaunchedEffect(lastLength) {
         // Während des Streamings nur mitscrollen, wenn man unten ist (kein Wegspringen beim Hochscrollen).
@@ -295,6 +318,14 @@ fun ChatScreen(
             ) {
                 items(messages, key = { it.id }) { msg ->
                     val isLastStreaming = state.streaming && msg.id == messages.last().id
+                    val flash by animateColorAsState(
+                        if (flashId == msg.id) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f) else Color.Transparent,
+                        animationSpec = tween(600),
+                        label = "fundstelle"
+                    )
+                    Box(Modifier.fillMaxWidth().drawBehind {
+                        if (flash.alpha > 0f) drawRoundRect(flash, cornerRadius = CornerRadius(16.dp.toPx()))
+                    }) {
                     MessageItem(
                         message = msg,
                         streaming = isLastStreaming,
@@ -314,6 +345,7 @@ fun ChatScreen(
                             { reporting = msg.text }
                         } else null,
                     )
+                    }
                 }
             }
         }
@@ -393,6 +425,10 @@ fun ChatScreen(
                             }
                         },
                         modifier = Modifier.clickable {
+                            // Bei aktiver Suche direkt zur ersten Fundstelle springen
+                            val q = historyQuery.trim()
+                            jumpTo = if (q.isEmpty()) null
+                            else conv.messages.firstOrNull { it.text.contains(q, ignoreCase = true) }?.id
                             vm.open(conv)
                             showHistory = false
                         }
