@@ -226,25 +226,32 @@ struct ChatView: View {
                         .font(.caption).foregroundStyle(Theme.secondaryText)
                         .listRowBackground(Color.clear)
                 }
-                ForEach(list) { c in
-                    Button {
-                        model.stop()
-                        // Bei aktiver Suche direkt zur ersten Fundstelle springen
-                        jumpTo = q.isEmpty ? nil : c.messages.first(where: { $0.text.localizedCaseInsensitiveContains(q) })?.id
-                        model.conversation = c
-                        showHistory = false
-                    } label: {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
-                            Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
-                            if let hit = Self.snippet(in: c, query: q) {
-                                Text(hit).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
+                // Nach Zeitraum gruppiert (Liste ist bereits nach letzter Änderung absteigend sortiert)
+                ForEach(Self.grouped(list)) { group in
+                    Section {
+                        ForEach(group.items) { c in
+                            Button {
+                                model.stop()
+                                // Bei aktiver Suche direkt zur ersten Fundstelle springen
+                                jumpTo = q.isEmpty ? nil : c.messages.first(where: { $0.text.localizedCaseInsensitiveContains(q) })?.id
+                                model.conversation = c
+                                showHistory = false
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
+                                    Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
+                                    if let hit = Self.snippet(in: c, query: q) {
+                                        Text(hit).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
+                                    }
+                                }
                             }
+                            .listRowBackground(Theme.card)
                         }
+                        .onDelete { idx in idx.map { group.items[$0].id }.forEach(store.delete) }
+                    } header: {
+                        Text(group.title).accessibilityAddTraits(.isHeader)
                     }
-                    .listRowBackground(Theme.card)
                 }
-                .onDelete { idx in idx.map { list[$0].id }.forEach(store.delete) }
             }
             .clearListBackground()
             .searchable(text: $historyQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: "Verlauf durchsuchen …")
@@ -255,6 +262,30 @@ struct ChatView: View {
             }
         }
         .preferredColorScheme(Theme.current.dark ? .dark : .light)
+    }
+
+    /// Zeitraum-Überschrift: Heute, Gestern, Letzte 7 Tage, Letzte 30 Tage, Älter (Kalendertage).
+    static func period(of date: Date, now: Date = Date()) -> String {
+        let cal = Calendar.current
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: date), to: cal.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ...0: return "Heute"
+        case 1: return "Gestern"
+        case 2..<7: return "Letzte 7 Tage"
+        case 7..<30: return "Letzte 30 Tage"
+        default: return "Älter"
+        }
+    }
+
+    /// Unterhaltungen in Zeitraum-Gruppen, Reihenfolge der Liste bleibt erhalten.
+    static func grouped(_ list: [Conversation]) -> [HistoryGroup] {
+        let now = Date()
+        var out: [HistoryGroup] = []
+        for c in list {
+            let t = period(of: c.updated, now: now)
+            if let i = out.firstIndex(where: { $0.title == t }) { out[i].items.append(c) } else { out.append(HistoryGroup(title: t, items: [c])) }
+        }
+        return out
     }
 
     /// Ausschnitt rund um den ersten Treffer in den Nachrichten, Suchbegriff hervorgehoben.
@@ -283,6 +314,13 @@ struct ChatView: View {
         if hits > 1 { out += AttributedString("  (\(hits) Treffer)") }
         return out
     }
+}
+
+/// Abschnitt im Chat-Verlauf (z. B. „Heute“) mit seinen Unterhaltungen.
+struct HistoryGroup: Identifiable {
+    let title: String
+    var items: [Conversation]
+    var id: String { title }
 }
 
 struct MessageRow: View {

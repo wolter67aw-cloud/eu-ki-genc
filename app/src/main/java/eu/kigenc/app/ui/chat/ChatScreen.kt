@@ -102,6 +102,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -122,6 +124,7 @@ import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
 import java.io.File
 import java.text.DateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -392,47 +395,65 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
                 )
             }
+            // Nach Zeitraum gruppiert (Liste ist bereits nach letzter Änderung absteigend sortiert)
+            val grouped = remember(filtered) {
+                val now = System.currentTimeMillis()
+                filtered.groupBy { historyPeriod(it.updatedAt, now) }.toList()
+            }
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
-                items(filtered, key = { it.id }) { conv ->
-                    ListItem(
-                        headlineContent = { Text(conv.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = {
-                            Column {
-                                Text(
-                                    DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
-                                        " · " + conv.model
-                                )
-                                val hit = remember(conv, historyQuery) { historySnippet(conv, historyQuery.trim(), highlight) }
-                                if (hit != null) {
+                grouped.forEach { (period, convs) ->
+                    item(key = "zeitraum_$period") {
+                        Text(
+                            period,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 24.dp, end = 24.dp, top = 12.dp, bottom = 4.dp)
+                                .semantics { heading() }
+                        )
+                    }
+                    items(convs, key = { it.id }) { conv ->
+                        ListItem(
+                            headlineContent = { Text(conv.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            supportingContent = {
+                                Column {
                                     Text(
-                                        hit,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.padding(top = 2.dp)
+                                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
+                                            " · " + conv.model
                                     )
+                                    val hit = remember(conv, historyQuery) { historySnippet(conv, historyQuery.trim(), highlight) }
+                                    if (hit != null) {
+                                        Text(
+                                            hit,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
                                 }
+                            },
+                            trailingContent = {
+                                Row {
+                                    IconButton(onClick = { renaming = conv; renameText = conv.title }) {
+                                        Icon(Icons.Outlined.Edit, contentDescription = "Umbenennen")
+                                    }
+                                    IconButton(onClick = { vm.delete(conv) }) {
+                                        Icon(Icons.Outlined.Delete, contentDescription = "Löschen")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                // Bei aktiver Suche direkt zur ersten Fundstelle springen
+                                val q = historyQuery.trim()
+                                jumpTo = if (q.isEmpty()) null
+                                else conv.messages.firstOrNull { it.text.contains(q, ignoreCase = true) }?.id
+                                vm.open(conv)
+                                showHistory = false
                             }
-                        },
-                        trailingContent = {
-                            Row {
-                                IconButton(onClick = { renaming = conv; renameText = conv.title }) {
-                                    Icon(Icons.Outlined.Edit, contentDescription = "Umbenennen")
-                                }
-                                IconButton(onClick = { vm.delete(conv) }) {
-                                    Icon(Icons.Outlined.Delete, contentDescription = "Löschen")
-                                }
-                            }
-                        },
-                        modifier = Modifier.clickable {
-                            // Bei aktiver Suche direkt zur ersten Fundstelle springen
-                            val q = historyQuery.trim()
-                            jumpTo = if (q.isEmpty()) null
-                            else conv.messages.firstOrNull { it.text.contains(q, ignoreCase = true) }?.id
-                            vm.open(conv)
-                            showHistory = false
-                        }
-                    )
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(24.dp))
@@ -735,6 +756,28 @@ private fun InputBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * Zeitraum-Überschrift für den Chat-Verlauf: Heute, Gestern, Letzte 7 Tage, Letzte 30 Tage, Älter.
+ * Gerechnet in Kalendertagen der Geräte-Zeitzone.
+ */
+private fun historyPeriod(time: Long, now: Long): String {
+    fun startOfDay(t: Long): Long = Calendar.getInstance().apply {
+        timeInMillis = t
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val today = startOfDay(now)
+    val day = startOfDay(time)
+    // Rundung fängt Zeitumstellungen (23/25-Stunden-Tage) ab
+    val days = Math.round((today - day) / 86_400_000.0)
+    return when {
+        days <= 0 -> "Heute"
+        days == 1L -> "Gestern"
+        days < 7 -> "Letzte 7 Tage"
+        days < 30 -> "Letzte 30 Tage"
+        else -> "Älter"
     }
 }
 
