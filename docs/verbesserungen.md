@@ -27,10 +27,10 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - Widgets (Android-Startbildschirm) für Schnellerfassung
 - Barrierefreiheit: größere Schrift, TalkBack/VoiceOver-Beschriftungen prüfen
 - Angeheftete Aufträge per Ziehen umsortieren
-- Chat-Verlauf nach Zeitraum gruppieren (Heute, Gestern, Diese Woche, Älter)
 - Android: App-Shortcuts (langes Drücken aufs Symbol) für angeheftete Aufträge
 - Im geöffneten Chat suchen (Lupe oben, mit „nächster/vorheriger Treffer“)
-- Chat-Verlauf: Unterhaltungen anheften, damit wichtige oben bleiben
+- Chat-Verlauf: Unterhaltungen anheften, damit wichtige oben bleiben (eigene Gruppe „Angeheftet“ über den Zeiträumen)
+- Chat-Verlauf: Gruppen ein-/ausklappen, wenn „Älter“ sehr lang wird
 
 ## Logbuch
 - 09.11.2026 (v1.0.48): 9 App-Designs als „Synthesizer-Skins“ mit Live-Vorschau unter Optionen → Design (Original, Neon Synthwave, Analog Vintage, Studio Graphite, Retro Terminal, Sunset Wave, Midnight Gold, Deep Ocean, Arctic Glass hell) – Android & iOS. Wunsch des Nutzers.
@@ -43,3 +43,4 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - 12.11.2026: Zugangscode – iOS-Tester konnten das I in „KIG“ nicht eintippen. „KIG-“ jetzt fest vorgegeben, nur 8 Zeichen eingeben; Präfix auf beiden Plattformen optional/tolerant (KG, K1G …). Build 56. Neuer Workflow „TestFlight verteilen“ (manuell, Build-Nr.) und Wiederholung beim Zuordnen zur Gruppe.
 - 13.11.2026 (v1.0.66): Chat-Verlauf durchsuchen – Treffer zeigen jetzt die Fundstelle (Ausschnitt mit hervorgehobenem Suchbegriff, „Du:“/„KI:“, Trefferanzahl) und oben „N Unterhaltungen gefunden“. iOS bekommt die Volltextsuche im Verlauf neu (Titel + alle Nachrichten; Wischen-Löschen arbeitet auf der gefilterten Liste). Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
 - 14.11.2026 (v1.0.68): Chat-Verlauf – Antippen eines Suchtreffers öffnet die Unterhaltung direkt an der ersten Fundstelle (statt am Ende) und hebt die gefundene Nachricht ca. 2,5 s farbig hervor. Ohne Suchbegriff unverändert. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
+- 15.11.2026 (v1.0.70): Chat-Verlauf nach Zeitraum gruppiert – Überschriften „Heute“, „Gestern“, „Letzte 7 Tage“, „Letzte 30 Tage“, „Älter“ (Kalendertage, Zeitumstellung berücksichtigt), auch bei aktiver Suche; Überschriften für TalkBack/VoiceOver als Überschrift markiert. iOS: Abschnitte in der Liste, Wischen-Löschen je Abschnitt. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
