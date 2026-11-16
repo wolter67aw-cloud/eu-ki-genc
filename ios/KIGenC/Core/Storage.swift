@@ -40,6 +40,22 @@ struct Conversation: Identifiable, Codable {
     var title: String
     var updated = Date()
     var messages: [ChatMessage]
+    /// Im Verlauf angeheftet (Gruppe „Angeheftet“ ganz oben). Fehlt in älteren Daten → false.
+    var pinned = false
+
+    enum CodingKeys: String, CodingKey { case id, title, updated, messages, pinned }
+}
+
+extension Conversation {
+    /// Tolerantes Laden: ältere gespeicherte Chats ohne „pinned“ bleiben lesbar.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try c.decodeIfPresent(String.self, forKey: .title) ?? "Unterhaltung"
+        updated = try c.decodeIfPresent(Date.self, forKey: .updated) ?? Date()
+        messages = try c.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
+        pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+    }
 }
 
 final class ConversationStore: ObservableObject {
@@ -48,10 +64,36 @@ final class ConversationStore: ObservableObject {
 
     func upsert(_ c: Conversation) {
         guard !c.messages.isEmpty else { return }
-        if let i = conversations.firstIndex(where: { $0.id == c.id }) { conversations[i] = c } else { conversations.insert(c, at: 0) }
+        if let i = conversations.firstIndex(where: { $0.id == c.id }) {
+            // Anheft-Status bleibt erhalten – er wird nur über setPinned geändert.
+            var n = c
+            n.pinned = conversations[i].pinned
+            conversations[i] = n
+        } else {
+            conversations.insert(c, at: 0)
+        }
         conversations.sort { $0.updated > $1.updated }
-        if conversations.count > 100 { conversations = Array(conversations.prefix(100)) }
+        trim()
         Store.save(conversations, "conversations.json")
+    }
+
+    /// Unterhaltung im Verlauf anheften oder lösen.
+    func setPinned(_ id: UUID, _ pinned: Bool) {
+        guard let i = conversations.firstIndex(where: { $0.id == id }) else { return }
+        conversations[i].pinned = pinned
+        Store.save(conversations, "conversations.json")
+    }
+
+    /// Höchstens 100 Unterhaltungen behalten; angeheftete werden dabei nie verdrängt.
+    private func trim() {
+        guard conversations.count > 100 else { return }
+        let pinnedCount = conversations.filter(\.pinned).count
+        var keepUnpinned = max(0, 100 - pinnedCount)
+        conversations = conversations.filter { c in
+            if c.pinned { return true }
+            if keepUnpinned > 0 { keepUnpinned -= 1; return true }
+            return false
+        }
     }
 
     func delete(_ id: UUID) {

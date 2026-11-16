@@ -50,6 +50,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Code
@@ -395,10 +397,12 @@ fun ChatScreen(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
                 )
             }
-            // Nach Zeitraum gruppiert (Liste ist bereits nach letzter Änderung absteigend sortiert)
+            // Angeheftete zuerst, dann nach Zeitraum gruppiert (Liste ist bereits nach letzter Änderung absteigend sortiert)
             val grouped = remember(filtered) {
                 val now = System.currentTimeMillis()
-                filtered.groupBy { historyPeriod(it.updatedAt, now) }.toList()
+                val (pinned, rest) = filtered.partition { it.pinned }
+                (if (pinned.isEmpty()) emptyList() else listOf("Angeheftet" to pinned)) +
+                    rest.groupBy { historyPeriod(it.updatedAt, now) }.toList()
             }
             LazyColumn(Modifier.heightIn(max = 520.dp)) {
                 grouped.forEach { (period, convs) ->
@@ -436,6 +440,12 @@ fun ChatScreen(
                             },
                             trailingContent = {
                                 Row {
+                                    IconButton(onClick = { vm.togglePin(conv) }) {
+                                        if (conv.pinned) Icon(
+                                            Icons.Filled.PushPin, contentDescription = "Lösen (nicht mehr angeheftet)",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        ) else Icon(Icons.Outlined.PushPin, contentDescription = "Anheften")
+                                    }
                                     IconButton(onClick = { renaming = conv; renameText = conv.title }) {
                                         Icon(Icons.Outlined.Edit, contentDescription = "Umbenennen")
                                     }

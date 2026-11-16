@@ -122,6 +122,19 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         }
     }
 
+    /** Unterhaltung im Verlauf anheften bzw. lösen. */
+    fun togglePin(conversation: Conversation) {
+        viewModelScope.launch {
+            val pinned = !conversation.pinned
+            app.chatStore.setPinned(conversation, pinned)
+            _state.update { st ->
+                val cur = st.current
+                if (cur != null && cur.id == conversation.id) st.copy(current = cur.copy(pinned = pinned)) else st
+            }
+            reload()
+        }
+    }
+
     fun stop() {
         job?.cancel()
         job = null

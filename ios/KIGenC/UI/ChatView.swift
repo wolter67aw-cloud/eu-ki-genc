@@ -238,7 +238,13 @@ struct ChatView: View {
                                 showHistory = false
                             } label: {
                                 VStack(alignment: .leading, spacing: 3) {
-                                    Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
+                                    HStack(spacing: 4) {
+                                        if c.pinned {
+                                            Image(systemName: "pin.fill").font(.caption).foregroundStyle(Theme.cyan)
+                                                .accessibilityLabel("Angeheftet")
+                                        }
+                                        Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
+                                    }
                                     Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
                                     if let hit = Self.snippet(in: c, query: q) {
                                         Text(hit).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
@@ -246,8 +252,30 @@ struct ChatView: View {
                                 }
                             }
                             .listRowBackground(Theme.card)
+                            .swipeActions(edge: .leading) {
+                                Button {
+                                    store.setPinned(c.id, !c.pinned)
+                                } label: {
+                                    Label(c.pinned ? "Lösen" : "Anheften", systemImage: c.pinned ? "pin.slash" : "pin")
+                                }
+                                .tint(Theme.cyan)
+                            }
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) { store.delete(c.id) } label: {
+                                    Label("Löschen", systemImage: "trash")
+                                }
+                            }
+                            .contextMenu {
+                                Button {
+                                    store.setPinned(c.id, !c.pinned)
+                                } label: {
+                                    Label(c.pinned ? "Lösen (nicht mehr angeheftet)" : "Anheften", systemImage: c.pinned ? "pin.slash" : "pin")
+                                }
+                                Button(role: .destructive) { store.delete(c.id) } label: {
+                                    Label("Löschen", systemImage: "trash")
+                                }
+                            }
                         }
-                        .onDelete { idx in idx.map { group.items[$0].id }.forEach(store.delete) }
                     } header: {
                         Text(group.title).accessibilityAddTraits(.isHeader)
                     }
@@ -277,11 +305,13 @@ struct ChatView: View {
         }
     }
 
-    /// Unterhaltungen in Zeitraum-Gruppen, Reihenfolge der Liste bleibt erhalten.
+    /// Angeheftete zuerst („Angeheftet“), dann Zeitraum-Gruppen; Reihenfolge der Liste bleibt erhalten.
     static func grouped(_ list: [Conversation]) -> [HistoryGroup] {
         let now = Date()
         var out: [HistoryGroup] = []
-        for c in list {
+        let pinned = list.filter(\.pinned)
+        if !pinned.isEmpty { out.append(HistoryGroup(title: "Angeheftet", items: pinned)) }
+        for c in list where !c.pinned {
             let t = period(of: c.updated, now: now)
             if let i = out.firstIndex(where: { $0.title == t }) { out[i].items.append(c) } else { out.append(HistoryGroup(title: t, items: [c])) }
         }
