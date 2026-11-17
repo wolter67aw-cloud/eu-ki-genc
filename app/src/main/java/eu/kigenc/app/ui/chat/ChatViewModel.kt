@@ -218,7 +218,10 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     app.chatStore.save(conversation)
                     _state.update { s ->
                         s.copy(
-                            current = if (s.current == null || s.current.id == conversation.id) conversation else s.current,
+                            // Anheft-Status aus der Anzeige übernehmen – er kann während der Antwort geändert worden sein.
+                            current = if (s.current == null || s.current.id == conversation.id) {
+                                conversation.copy(pinned = s.current?.pinned ?: conversation.pinned)
+                            } else s.current,
                             streaming = false,
                         )
                     }

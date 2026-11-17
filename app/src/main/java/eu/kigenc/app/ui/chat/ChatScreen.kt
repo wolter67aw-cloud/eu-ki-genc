@@ -46,6 +46,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
@@ -159,6 +161,7 @@ fun ChatScreen(
     var flashId by remember { mutableStateOf<String?>(null) }
     var reporting by remember { mutableStateOf<String?>(null) }
     val isCode = vm.mode == ChatMode.CODE
+    val pinScope = rememberCoroutineScope()
 
     LaunchedEffect(state.error) {
         state.error?.let {
@@ -275,6 +278,24 @@ fun ChatScreen(
                     }
                 },
                 actions = {
+                    // Geöffnete Unterhaltung direkt hier anheften bzw. lösen (ohne Umweg über den Verlauf)
+                    val open = state.current?.takeIf { it.messages.isNotEmpty() }
+                    if (open != null) {
+                        IconButton(onClick = {
+                            vm.togglePin(open)
+                            pinScope.launch {
+                                snackbar.currentSnackbarData?.dismiss()
+                                snackbar.showSnackbar(
+                                    if (open.pinned) "Nicht mehr angeheftet" else "Im Verlauf unter „Angeheftet“ abgelegt"
+                                )
+                            }
+                        }) {
+                            if (open.pinned) Icon(
+                                Icons.Filled.PushPin, contentDescription = "Unterhaltung lösen (nicht mehr angeheftet)",
+                                tint = MaterialTheme.colorScheme.primary
+                            ) else Icon(Icons.Outlined.PushPin, contentDescription = "Unterhaltung anheften")
+                        }
+                    }
                     IconButton(onClick = { vm.newChat(); input = "" }) {
                         Icon(Icons.Outlined.EditNote, contentDescription = "Neue Unterhaltung")
                     }

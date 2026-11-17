@@ -53,6 +53,25 @@ final class ChatModel: ObservableObject {
         busy = false
     }
 
+    /// Ist die geöffnete Unterhaltung im Verlauf angeheftet? (Maßgeblich ist der gespeicherte Stand.)
+    var isPinned: Bool {
+        ConversationStore.shared.conversations.first { $0.id == conversation.id }?.pinned ?? conversation.pinned
+    }
+
+    /// Geöffnete Unterhaltung direkt aus dem Chat anheften bzw. lösen.
+    func togglePin() {
+        guard !conversation.messages.isEmpty else { return }
+        let pinned = !isPinned
+        conversation.pinned = pinned
+        let store = ConversationStore.shared
+        if store.conversations.contains(where: { $0.id == conversation.id }) {
+            store.setPinned(conversation.id, pinned)
+        } else {
+            // Noch nicht gespeichert (z. B. erste Antwort läuft noch) → mit Anheft-Status anlegen.
+            store.upsert(conversation)
+        }
+    }
+
     func newChat() {
         stop()
         if !conversation.messages.isEmpty { ConversationStore.shared.upsert(conversation) }
@@ -101,7 +120,14 @@ struct ChatView: View {
                         }
                         Toggle("Antworten vorlesen", isOn: $settings.autoSpeak)
                     } label: { Image(systemName: "cpu") }
+                    if !model.conversation.messages.isEmpty {
+                        Button { model.togglePin() } label: {
+                            Image(systemName: model.isPinned ? "pin.fill" : "pin")
+                        }
+                        .accessibilityLabel(model.isPinned ? "Unterhaltung lösen (nicht mehr angeheftet)" : "Unterhaltung anheften")
+                    }
                     Button { model.newChat() } label: { Image(systemName: "square.and.pencil") }
+                        .accessibilityLabel("Neue Unterhaltung")
                 }
             }
             .sheet(isPresented: $showHistory) { history }
