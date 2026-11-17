@@ -31,7 +31,8 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - Im geöffneten Chat suchen (Lupe oben, mit „nächster/vorheriger Treffer“)
 - Chat-Verlauf: Gruppen ein-/ausklappen, wenn „Älter“ sehr lang wird
 - iOS-Verlauf: Unterhaltungen umbenennen (Android hat es bereits)
-- Geöffneten Chat anheften direkt über das Menü oben im Chat (ohne Umweg über den Verlauf)
+- Angeheftete Unterhaltungen im Verlauf per Ziehen umsortieren
+- Chat-Verlauf: angeheftete Unterhaltungen als Schnellwahl auf der leeren Chat-Startansicht
 
 ## Logbuch
 - 09.11.2026 (v1.0.48): 9 App-Designs als „Synthesizer-Skins“ mit Live-Vorschau unter Optionen → Design (Original, Neon Synthwave, Analog Vintage, Studio Graphite, Retro Terminal, Sunset Wave, Midnight Gold, Deep Ocean, Arctic Glass hell) – Android & iOS. Wunsch des Nutzers.
@@ -46,3 +47,4 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - 14.11.2026 (v1.0.68): Chat-Verlauf – Antippen eines Suchtreffers öffnet die Unterhaltung direkt an der ersten Fundstelle (statt am Ende) und hebt die gefundene Nachricht ca. 2,5 s farbig hervor. Ohne Suchbegriff unverändert. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
 - 15.11.2026 (v1.0.70): Chat-Verlauf nach Zeitraum gruppiert – Überschriften „Heute“, „Gestern“, „Letzte 7 Tage“, „Letzte 30 Tage“, „Älter“ (Kalendertage, Zeitumstellung berücksichtigt), auch bei aktiver Suche; Überschriften für TalkBack/VoiceOver als Überschrift markiert. iOS: Abschnitte in der Liste, Wischen-Löschen je Abschnitt. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
 - 16.11.2026 (v1.0.72): Chat-Verlauf – Unterhaltungen anheften. Angeheftete stehen in eigener Gruppe „Angeheftet“ über den Zeiträumen (auch bei Suche). Android: Pinnadel-Knopf in jeder Zeile; iOS: nach rechts wischen bzw. langes Drücken, Pinnadel vor dem Titel, Löschen jetzt als Wisch-Aktion/Kontextmenü; angeheftete werden von der 100er-Grenze nicht verdrängt. Speichern einer Antwort setzt den Anheft-Status nicht zurück. Datenformat abwärtskompatibel (neues optionales Feld „pinned“; iOS lädt ältere Chats tolerant). Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
+- 17.11.2026 (v1.0.75): Chat – geöffnete Unterhaltung direkt oben in der Leiste per Pinnadel anheften/lösen (ohne Umweg über den Verlauf); Knopf nur sichtbar, wenn der Chat Nachrichten hat, gefüllte Pinnadel = angeheftet. Android: kurze Rückmeldung als Snackbar; Anheft-Status bleibt erhalten, auch wenn er während einer laufenden Antwort geändert wird. iOS: Status kommt aus dem gespeicherten Verlauf, noch nicht gespeicherte Chats werden beim Anheften angelegt; VoiceOver-Beschriftungen für Pinnadel und „Neue Unterhaltung“. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Aus dem Ideen-Speicher.
