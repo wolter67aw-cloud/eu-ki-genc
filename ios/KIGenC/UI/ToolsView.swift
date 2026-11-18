@@ -664,6 +664,7 @@ struct DataToolView: View {
     @State private var answer = ""
     @State private var error: String?
     @State private var busy = false
+    @State private var charts: [UIImage] = []
 
     var body: some View {
         ScrollView {
@@ -679,8 +680,21 @@ struct DataToolView: View {
                     .padding(10).background(Theme.card, in: RoundedRectangle(cornerRadius: 12))
                 GradientButton(title: "KI-Analyse", icon: "chart.bar.xaxis", busy: busy) { Task { await analyze() } }
                     .disabled(csv.isEmpty || !settings.hasKey)
+                Button { Task { await analyzeWithCode() } } label: {
+                    Label("Mit Code genau berechnen (inkl. Diagramm)", systemImage: "function").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered).tint(Theme.cyan)
+                .disabled(csv.isEmpty || !settings.hasKey || busy)
                 if let error { ErrorCard(message: error) }
                 if !answer.isEmpty { VStack(alignment: .leading) { MarkdownView(text: answer); ResultActions(text: answer, kind: "Datenanalyse") }.card() }
+                ForEach(Array(charts.enumerated()), id: \.offset) { i, img in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Image(uiImage: img).resizable().scaledToFit().clipShape(RoundedRectangle(cornerRadius: 12))
+                            .accessibilityLabel("Diagramm \(i + 1)")
+                        ResultActions(text: "", image: img, kind: "Diagramm")
+                    }
+                    .card()
+                }
             }
             .padding()
         }
@@ -689,6 +703,28 @@ struct DataToolView: View {
             if case .success(let url) = r, let a = try? AttachmentLoader.file(url) {
                 csv = a.text; name = a.name; stats = DataStats.describe(csv)
             }
+        }
+    }
+
+    /// Auswertung mit echtem Python-Code (Mistral Code-Interpreter) – exakt gerechnet, mit Diagrammen.
+    @MainActor
+    private func analyzeWithCode() async {
+        busy = true; error = nil; answer = ""; charts = []
+        defer { busy = false }
+        let instructions = "Du bist ein sorgfältiger Datenanalyst. Lies die Daten mit pandas ein (Trennzeichen erkennen, deutsche Zahlen umwandeln), rechne ALLES mit dem Werkzeug code_interpreter und erstelle bei Bedarf ein Diagramm mit matplotlib (deutsche Beschriftungen). Antworte auf Deutsch in Markdown; kennzeichne Prognosen als unsicher."
+        let input = "\(question)\n\nDaten\(name.isEmpty ? "" : " (\(name))") – erste Zeile = Spaltennamen:\n\(csv.prefix(60_000))"
+        do {
+            var run: MistralClient.CodeRun
+            do {
+                run = try await MistralClient.shared.runCode(key: settings.key, model: settings.chatModel, instructions: instructions, input: input)
+            } catch let e as APIError where e.code != 401 && e.code != 429 && settings.chatModel != "mistral-medium-latest" {
+                run = try await MistralClient.shared.runCode(key: settings.key, model: "mistral-medium-latest", instructions: instructions, input: input)
+            }
+            answer = run.markdown
+            charts = run.images.compactMap { UIImage(data: $0) }
+        } catch {
+            ErrorLog.report(error, context: "Datenanalyse (Code)")
+            self.error = friendly(error)
         }
     }
 

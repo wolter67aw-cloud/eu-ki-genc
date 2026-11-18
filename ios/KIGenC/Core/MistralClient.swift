@@ -231,6 +231,65 @@ final class MistralClient {
         return (text.trimmingCharacters(in: .whitespacesAndNewlines), sources)
     }
 
+    // MARK: Code ausführen (Code-Interpreter)
+
+    /// Ergebnis des Code-Interpreters: Antworttext, ausgeführter Code mit Ausgabe, erzeugte Diagramme.
+    struct CodeRun {
+        var text: String
+        var executions: [(code: String, output: String)]
+        var images: [Data]
+
+        /// Antwort als Markdown inkl. ausgeführtem Code und Ergebnis (zum Nachvollziehen).
+        var markdown: String {
+            var s = text.isEmpty ? "(keine Antwort)" : text
+            for (i, e) in executions.enumerated() {
+                s += "\n\n---\n**Ausgeführter Python-Code\(executions.count > 1 ? " \(i + 1)" : ""):**\n```python\n\(e.code.trimmingCharacters(in: .whitespacesAndNewlines))\n```"
+                let out = e.output.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !out.isEmpty { s += "\n**Ergebnis:**\n```\n\(out.prefix(4000))\n```" }
+            }
+            return s
+        }
+    }
+
+    /// Lässt Mistral Python-Code in einer abgeschotteten Umgebung ausführen (Werkzeug code_interpreter).
+    func runCode(key: String, model: String, instructions: String, input: String) async throws -> CodeRun {
+        let body: [String: Any] = [
+            "model": model, "instructions": instructions,
+            "inputs": [["role": "user", "content": input]],
+            "tools": [["type": "code_interpreter"]], "store": false,
+        ]
+        var r = request("/conversations", key: key, body: body)
+        r.timeoutInterval = 240
+        let o = try await json(r)
+        var run = CodeRun(text: "", executions: [], images: [])
+        var ids: [String] = []
+        for entry in o["outputs"] as? [[String: Any]] ?? [] {
+            switch entry["type"] as? String {
+            case "tool.execution":
+                let info = entry["info"] as? [String: Any] ?? [:]
+                let code = info["code"] as? String ?? ""
+                if !code.isEmpty { run.executions.append((code, info["code_output"] as? String ?? "")) }
+            case "message.output":
+                if let s = entry["content"] as? String { run.text += s }
+                for chunk in entry["content"] as? [[String: Any]] ?? [] {
+                    switch chunk["type"] as? String {
+                    case "text": run.text += chunk["text"] as? String ?? ""
+                    case "tool_file": if let id = chunk["file_id"] as? String { ids.append(id) }
+                    default: break
+                    }
+                }
+            default: break
+            }
+        }
+        run.text = run.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        for id in ids {
+            var fr = request("/files/\(id)/content", key: key, method: "GET", accept: "*/*")
+            fr.timeoutInterval = 120
+            if let (data, resp) = try? await session.data(for: fr), ((resp as? HTTPURLResponse)?.statusCode ?? 0) < 300 { run.images.append(data) }
+        }
+        return run
+    }
+
     // MARK: Transkription (Voxtral)
 
     func transcribe(key: String, data: Data, fileName: String, mime: String, language: String?) async throws -> String {

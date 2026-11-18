@@ -48,6 +48,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import eu.kigenc.app.data.ImageUtils
+import eu.kigenc.app.data.report
+import eu.kigenc.app.ui.components.shareImage
 import kotlin.math.sqrt
 
 /** CSV-Einlesen und einfache Statistik – komplett auf dem Gerät. */
@@ -199,6 +207,8 @@ object DataAnalysis {
 }
 
 class DataViewModel(app: KiApp) : AiToolViewModel(app) {
+    /** Vom Code-Interpreter erzeugte Diagramme. */
+    val charts = MutableStateFlow<List<java.io.File>>(emptyList())
     val table = MutableStateFlow<List<List<String>>>(emptyList())
     val stats = MutableStateFlow("")
     val sourceName = MutableStateFlow<String?>(null)
@@ -235,6 +245,42 @@ class DataViewModel(app: KiApp) : AiToolViewModel(app) {
         }
     }
 
+    /** Auswertung mit echtem Python-Code (Mistral Code-Interpreter) – exakt gerechnet, mit Diagrammen. */
+    fun analyzeWithCode(question: String) {
+        val t = table.value
+        if (t.size < 2 || busy.value) return
+        viewModelScope.launch {
+            val s = settingsOrNull() ?: return@launch
+            busy.value = true
+            output.value = ""
+            charts.value = emptyList()
+            try {
+                val input = buildString {
+                    append(question.ifBlank { "Werte diese Tabelle aus: wichtigste Kennzahlen, Muster, Auffälligkeiten, Trends und ein passendes Diagramm." })
+                    append("\n\nDaten (CSV, Semikolon-getrennt, erste Zeile = Spaltennamen; Zahlen ggf. im deutschen Format):\n")
+                    append(DataAnalysis.toCsvText(t, 5_000, 60_000))
+                }
+                val instructions = "Du bist ein sorgfältiger Datenanalyst. Lies die Daten mit pandas ein (sep=';', deutsche Zahlen " +
+                    "umwandeln), rechne ALLES mit dem Werkzeug code_interpreter und erstelle bei Bedarf ein Diagramm mit matplotlib " +
+                    "(deutsche Beschriftungen). Antworte auf Deutsch in Markdown; kennzeichne Prognosen als unsicher."
+                val run = try {
+                    app.mistral.runCode(s.apiKey, s.chatModel, instructions, input)
+                } catch (e: eu.kigenc.app.ai.MistralException) {
+                    if (e.code == 401 || e.code == 429 || s.chatModel == "mistral-medium-latest") throw e
+                    app.mistral.runCode(s.apiKey, "mistral-medium-latest", instructions, input)
+                }
+                output.value = run.markdown()
+                charts.value = withContext(Dispatchers.IO) { run.images.map { java.io.File(ImageUtils.saveImageBytes(app, it)) } }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message.value = e.report("Daten (Code)")
+            } finally {
+                busy.value = false
+            }
+        }
+    }
+
     fun analyze(question: String) {
         val t = table.value
         if (t.size < 2) return
@@ -263,6 +309,8 @@ fun DataScreen(vm: DataViewModel, onBack: () -> Unit, modifier: Modifier = Modif
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val name by vm.sourceName.collectAsStateWithLifecycle()
+    val charts by vm.charts.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var pasted by rememberSaveable { mutableStateOf("") }
     var question by rememberSaveable { mutableStateOf("") }
     val open = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::load) }
@@ -335,9 +383,24 @@ fun DataScreen(vm: DataViewModel, onBack: () -> Unit, modifier: Modifier = Modif
                     Button(onClick = { vm.analyze(question) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                         Text(if (busy) "Analysiere …" else "Mit KI auswerten")
                     }
+                    OutlinedButton(onClick = { vm.analyzeWithCode(question) }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("Mit Code genau berechnen (inkl. Diagramm)")
+                    }
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
                 if (output.isNotEmpty()) item { ResultCard(output, busy, "data-ai") }
+                items(charts.size) { i ->
+                    val f = charts[i]
+                    val bmp = remember(f) { android.graphics.BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap() }
+                    if (bmp != null) {
+                        androidx.compose.foundation.Image(
+                            bmp, "Diagramm ${i + 1}",
+                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                .clickable { context.shareImage(f) }
+                        )
+                    }
+                }
             }
         }
     }

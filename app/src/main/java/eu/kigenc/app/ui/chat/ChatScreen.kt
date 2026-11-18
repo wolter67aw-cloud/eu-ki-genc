@@ -62,6 +62,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.RecordVoiceOver
@@ -131,6 +132,7 @@ import eu.kigenc.app.ui.components.MarkdownText
 import eu.kigenc.app.ui.components.ReportDialog
 import eu.kigenc.app.ui.components.rememberCopyToClipboard
 import eu.kigenc.app.ui.components.shareText
+import eu.kigenc.app.ui.components.shareImage
 import java.io.File
 import java.text.DateFormat
 import java.util.Calendar
@@ -327,6 +329,8 @@ fun ChatScreen(
                 attachedImages = state.attachedImages,
                 webSearch = if (isCode) null else state.webSearch,
                 onToggleWeb = vm::toggleWebSearch,
+                codeRun = if (isCode) null else state.codeRun,
+                onToggleCode = vm::toggleCodeRun,
                 streaming = state.streaming,
                 allowImages = !isCode,
                 placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag KI-GenC …",
@@ -690,6 +694,7 @@ private fun MessageItem(
     onEdit: (() -> Unit)? = null,
     onReport: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     if (message.role == Role.USER) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
             val images = message.allImages
@@ -773,6 +778,18 @@ private fun MessageItem(
                         color = if (message.isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                         onCopyCode = onCopy,
                     )
+                    // Von der KI erzeugte Diagramme (Code ausführen)
+                    message.allImages.forEachIndexed { i, path ->
+                        val bmp = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
+                        if (bmp != null) {
+                            Image(
+                                bmp, contentDescription = "Diagramm ${i + 1}",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                                    .clickable { context.shareImage(File(path)) }
+                            )
+                        }
+                    }
                 }
                 AnimatedVisibility(!streaming && message.text.isNotEmpty()) {
                     // Bei schmalen Bildschirmen seitlich verschiebbar, damit alle Knöpfe erreichbar bleiben
@@ -816,6 +833,8 @@ private fun InputBar(
     attachedImages: List<String>,
     webSearch: Boolean?,
     onToggleWeb: () -> Unit,
+    codeRun: Boolean?,
+    onToggleCode: () -> Unit,
     streaming: Boolean,
     allowImages: Boolean,
     placeholder: String,
@@ -888,6 +907,15 @@ private fun InputBar(
                         }
                     }
                 }
+                if (codeRun != null) {
+                    IconButton(onClick = onToggleCode) {
+                        Icon(
+                            Icons.Outlined.Calculate,
+                            contentDescription = if (codeRun) "Code ausführen ausschalten" else "Code ausführen einschalten (Rechnen, Datenanalyse, Diagramme)",
+                            tint = if (codeRun) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 if (webSearch != null) {
                     IconButton(onClick = onToggleWeb) {
                         Icon(
@@ -900,7 +928,16 @@ private fun InputBar(
                 OutlinedTextField(
                     value = text,
                     onValueChange = onTextChange,
-                    placeholder = { Text(if (webSearch == true) "Frag mit Websuche …" else placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    placeholder = {
+                        Text(
+                            when {
+                                webSearch == true -> "Frag mit Websuche …"
+                                codeRun == true -> "Rechnen, auswerten, Diagramm …"
+                                else -> placeholder
+                            },
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     maxLines = 6,
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(

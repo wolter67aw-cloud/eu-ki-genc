@@ -39,6 +39,8 @@ data class ChatUiState(
     val notice: String? = null,
     /** Websuche für die nächsten Fragen (Antwort mit aktuellen Quellen). */
     val webSearch: Boolean = false,
+    /** Code ausführen: die KI rechnet mit echtem Python-Code (Mistral Code-Interpreter). */
+    val codeRun: Boolean = false,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
@@ -48,6 +50,8 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         const val MAX_IMAGES = 6
         /** Höchstzahl Bilder pro Anfrage an die KI (über den ganzen Verlauf). */
         private const val MAX_API_IMAGES = 8
+        /** Modell für den Code-Interpreter, falls das gewählte es nicht unterstützt. */
+        private const val CODE_RUN_FALLBACK = "mistral-medium-latest"
     }
 
     private val _state = MutableStateFlow(ChatUiState())
@@ -103,7 +107,13 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun toggleWebSearch() = _state.update {
         val on = !it.webSearch
-        it.copy(webSearch = on, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
+        it.copy(webSearch = on, codeRun = if (on) false else it.codeRun, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
+    }
+
+    fun toggleCodeRun() = _state.update {
+        val on = !it.codeRun
+        it.copy(codeRun = on, webSearch = if (on) false else it.webSearch,
+            notice = if (on) "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" else "Code ausführen aus")
     }
 
     fun reportError(message: String) = _state.update { it.copy(error = message) }
@@ -231,11 +241,28 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             _state.update { it.copy(current = conversation, attachedImages = emptyList(), streaming = true, error = null) }
 
             val answer = StringBuilder()
+            /** Vom Code-Interpreter erzeugte Diagramme (Dateipfade). */
+            var answerImages: List<String> = emptyList()
             var failed: String? = null
             var lastUiUpdate = 0L
             try {
                 val project = app.projects.byId(base.projectId)
-                if (_state.value.webSearch && mode == ChatMode.CHAT && images.isEmpty()) {
+                if (_state.value.codeRun && mode == ChatMode.CHAT && images.isEmpty()) {
+                    // Code-Interpreter: echte Berechnung in Python, Ergebnis + Code + Diagramme
+                    val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
+                    val instructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, " +
+                        "Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. " +
+                        "Diagramme mit matplotlib, Beschriftungen auf Deutsch." + memoryText + (project?.systemText(8_000) ?: "")
+                    val question = webQuestion(history, "")
+                    val run = try {
+                        app.mistral.runCode(settings.apiKey, model, instructions, question)
+                    } catch (e: eu.kigenc.app.ai.MistralException) {
+                        if (e.code == 401 || e.code == 429 || model == CODE_RUN_FALLBACK) throw e
+                        app.mistral.runCode(settings.apiKey, CODE_RUN_FALLBACK, instructions, question)
+                    }
+                    answer.append(run.markdown())
+                    answerImages = withContext(Dispatchers.IO) { run.images.map { ImageUtils.saveImageBytes(app, it) } }
+                } else if (_state.value.webSearch && mode == ChatMode.CHAT && images.isEmpty()) {
                     // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
                     val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
                     val r = app.mistral.webSearch(settings.apiKey, model, webQuestion(history, memoryText + (project?.systemText(8_000) ?: "")))
@@ -282,7 +309,11 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     }
                     conversation = conversation.copy(
                         messages = conversation.messages.map {
-                            if (it.id == assistant.id) it.copy(text = finalText, isError = failed != null) else it
+                            if (it.id == assistant.id) it.copy(
+                                text = finalText, isError = failed != null,
+                                imagePath = answerImages.firstOrNull(),
+                                imagePaths = if (answerImages.size > 1) answerImages else emptyList(),
+                            ) else it
                         },
                         updatedAt = System.currentTimeMillis(),
                     )
@@ -325,7 +356,8 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         // Neueste zuerst bedienen, damit die aktuelle Nachricht alle ihre Bilder behält.
         val imageCount = mutableMapOf<String, Int>()
         var left = MAX_API_IMAGES
-        recent.filter { it.allImages.isNotEmpty() }.takeLast(3).asReversed().forEach { m ->
+        // Bilder nur aus eigenen Nachrichten mitsenden (Diagramme der KI nicht zurückschicken)
+        recent.filter { it.role == Role.USER && it.allImages.isNotEmpty() }.takeLast(3).asReversed().forEach { m ->
             val n = minOf(left, m.allImages.size)
             imageCount[m.id] = n
             left -= n

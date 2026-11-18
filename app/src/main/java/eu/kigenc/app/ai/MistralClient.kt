@@ -340,6 +340,68 @@ class MistralClient {
 
     data class GeneratedImage(val bytes: ByteArray, val caption: String)
 
+    /** Ergebnis des Code-Interpreters: Antworttext, ausgeführter Code mit Ausgabe, erzeugte Diagramme. */
+    data class CodeRun(val text: String, val executions: List<Pair<String, String>>, val images: List<ByteArray>) {
+        /** Antwort als Markdown inkl. ausgeführtem Code und Ergebnis (zum Nachvollziehen). */
+        fun markdown(): String = buildString {
+            append(text.ifBlank { "(keine Antwort)" })
+            executions.forEachIndexed { i, (code, out) ->
+                append("\n\n---\n**Ausgeführter Python-Code")
+                if (executions.size > 1) append(" ${i + 1}")
+                append(":**\n```python\n").append(code.trim()).append("\n```")
+                if (out.isNotBlank()) append("\n**Ergebnis:**\n```\n").append(out.trim().take(4000)).append("\n```")
+            }
+        }
+    }
+
+    /**
+     * Lässt Mistral Python-Code in einer abgeschotteten Umgebung ausführen (eingebautes Werkzeug code_interpreter),
+     * z. B. für exakte Berechnungen, Datenanalyse und Diagramme.
+     */
+    suspend fun runCode(apiKey: String, model: String, instructions: String, input: String): CodeRun =
+        withContext(Dispatchers.IO) {
+            val body = JSONObject()
+                .put("model", model)
+                .put("instructions", instructions)
+                .put("inputs", JSONArray().put(JSONObject().put("role", "user").put("content", input)))
+                .put("tools", JSONArray().put(JSONObject().put("type", "code_interpreter")))
+                .put("store", false)
+            val c = open("/conversations", "POST", apiKey, readTimeoutMs = 240_000)
+            val response = try {
+                c.sendJson(body)
+                c.readJson()
+            } finally {
+                c.disconnect()
+            }
+            val text = StringBuilder()
+            val runs = mutableListOf<Pair<String, String>>()
+            val fileIds = mutableListOf<String>()
+            val outputs = response.optJSONArray("outputs") ?: JSONArray()
+            for (i in 0 until outputs.length()) {
+                val entry = outputs.optJSONObject(i) ?: continue
+                when (entry.optString("type")) {
+                    "tool.execution" -> {
+                        val info = entry.optJSONObject("info")
+                        val code = info?.optString("code").orEmpty()
+                        val out = info?.optString("code_output").orEmpty()
+                        if (code.isNotBlank()) runs += code to out
+                    }
+                    "message.output" -> when (val content = entry.opt("content")) {
+                        is String -> text.append(content)
+                        is JSONArray -> for (j in 0 until content.length()) {
+                            val chunk = content.optJSONObject(j) ?: continue
+                            when (chunk.optString("type")) {
+                                "text" -> text.append(chunk.optString("text"))
+                                "tool_file" -> chunk.optString("file_id").takeIf { it.isNotBlank() }?.let(fileIds::add)
+                            }
+                        }
+                    }
+                }
+            }
+            val images = fileIds.mapNotNull { runCatching { downloadFile(apiKey, it) }.getOrNull() }
+            CodeRun(text.toString().trim(), runs, images)
+        }
+
     /** Erzeugt Bilder über die Conversations-API und lädt sie herunter. */
     /** Bild über einen vorhandenen Agenten erzeugen. */
     suspend fun generateImages(apiKey: String, agentId: String, prompt: String): List<GeneratedImage> =

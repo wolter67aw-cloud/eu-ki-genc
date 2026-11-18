@@ -21,6 +21,13 @@ object ImageUtils {
     private fun imagesDir(context: Context) = File(context.filesDir, "images").apply { mkdirs() }
     fun generatedDir(context: Context) = File(context.filesDir, "generated").apply { mkdirs() }
 
+    /** Speichert Bilddaten (z. B. ein Diagramm aus dem Code-Interpreter) im privaten Bilder-Ordner. */
+    fun saveImageBytes(context: Context, bytes: ByteArray): String {
+        val file = File(imagesDir(context), "${UUID.randomUUID()}.${extensionFor(bytes)}")
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
     /** Speichert ein erzeugtes Bild (z. B. Collage) wie ein importiertes Foto und liefert den Pfad. */
     fun saveImage(context: Context, bitmap: Bitmap, quality: Int = 90): String {
         val file = File(imagesDir(context), "${UUID.randomUUID()}.jpg")

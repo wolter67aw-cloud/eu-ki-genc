@@ -12,6 +12,8 @@ final class ChatModel: ObservableObject {
     @Published var notice: String?
     /// Websuche für die nächsten Fragen (Antwort mit aktuellen Quellen).
     @Published var webSearch = false
+    /// Code ausführen: die KI rechnet mit echtem Python-Code (Mistral Code-Interpreter).
+    @Published var codeRun = false
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -38,11 +40,24 @@ final class ChatModel: ObservableObject {
         let index = conversation.messages.count - 1
         busy = true
         let model = images.isEmpty ? settings.chatModel : (settings.chatModel.contains("ministral") || settings.chatModel.contains("magistral") ? "mistral-small-latest" : settings.chatModel)
-        let useWeb = webSearch && images.isEmpty && extra.isEmpty
+        let useCode = codeRun && images.isEmpty
+        let useWeb = !useCode && webSearch && images.isEmpty && extra.isEmpty
+        let codeInstructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. Diagramme mit matplotlib, Beschriftungen auf Deutsch." + memoryText + String(projectText.prefix(8_000))
+        let codeInput = useCode ? Self.webQuestion(history: Array(history), question: shown + extra, extras: "") : ""
         let webQuestion = useWeb ? Self.webQuestion(history: Array(history), question: shown, extras: memoryText + String(projectText.prefix(8_000))) : ""
         task = Task {
             do {
-                if useWeb {
+                if useCode {
+                    // Code-Interpreter: echte Berechnung in Python, Ergebnis + Code + Diagramme
+                    var run: MistralClient.CodeRun
+                    do {
+                        run = try await MistralClient.shared.runCode(key: settings.key, model: model, instructions: codeInstructions, input: codeInput)
+                    } catch let e as APIError where e.code != 401 && e.code != 429 && model != "mistral-medium-latest" {
+                        run = try await MistralClient.shared.runCode(key: settings.key, model: "mistral-medium-latest", instructions: codeInstructions, input: codeInput)
+                    }
+                    conversation.messages[index].text = run.markdown
+                    conversation.messages[index].images = run.images.map { "data:image/png;base64," + $0.base64EncodedString() }
+                } else if useWeb {
                     // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
                     let (answer, sources) = try await MistralClient.shared.webSearch(key: settings.key, model: model, question: webQuestion)
                     var t = answer.isEmpty ? "(keine Antwort)" : answer
@@ -333,14 +348,24 @@ struct ChatView: View {
                     Image(systemName: showAttach ? "xmark.circle" : "plus.circle").font(.title2)
                 }
                 Button {
+                    model.codeRun.toggle()
+                    if model.codeRun { model.webSearch = false }
+                    model.notice = model.codeRun ? "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" : "Code ausführen aus"
+                } label: {
+                    Image(systemName: "function").font(.title2)
+                        .foregroundStyle(model.codeRun ? Theme.cyan : Theme.secondaryText)
+                }
+                .accessibilityLabel(model.codeRun ? "Code ausführen ausschalten" : "Code ausführen einschalten (Rechnen, Datenanalyse, Diagramme)")
+                Button {
                     model.webSearch.toggle()
+                    if model.webSearch { model.codeRun = false }
                     model.notice = model.webSearch ? "Websuche an – Antworten mit aktuellen Quellen" : "Websuche aus"
                 } label: {
                     Image(systemName: "globe").font(.title2)
                         .foregroundStyle(model.webSearch ? Theme.cyan : Theme.secondaryText)
                 }
                 .accessibilityLabel(model.webSearch ? "Websuche ausschalten" : "Websuche einschalten")
-                TextField(model.webSearch ? "Frag mit Websuche …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
+                TextField(model.webSearch ? "Frag mit Websuche …" : model.codeRun ? "Rechnen, auswerten, Diagramm …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 9)
