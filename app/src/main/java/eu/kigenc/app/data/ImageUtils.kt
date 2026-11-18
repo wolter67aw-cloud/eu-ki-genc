@@ -21,6 +21,13 @@ object ImageUtils {
     private fun imagesDir(context: Context) = File(context.filesDir, "images").apply { mkdirs() }
     fun generatedDir(context: Context) = File(context.filesDir, "generated").apply { mkdirs() }
 
+    /** Speichert ein erzeugtes Bild (z. B. Collage) wie ein importiertes Foto und liefert den Pfad. */
+    fun saveImage(context: Context, bitmap: Bitmap, quality: Int = 90): String {
+        val file = File(imagesDir(context), "${UUID.randomUUID()}.jpg")
+        file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, quality, it) }
+        return file.absolutePath
+    }
+
     /** Importiert ein Bild (Galerie/Kamera), verkleinert es und speichert es als JPEG. */
     fun importImage(context: Context, uri: Uri): String {
         val bitmap = decodeScaled(context, uri) ?: error("Bild konnte nicht gelesen werden.")

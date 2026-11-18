@@ -30,11 +30,19 @@ data class ChatUiState(
     val conversations: List<Conversation> = emptyList(),
     val current: Conversation? = null,
     val streaming: Boolean = false,
-    val attachedImage: String? = null,
+    /** Für die nächste Nachricht ausgewählte Bilder (mehrere möglich). */
+    val attachedImages: List<String> = emptyList(),
     val error: String? = null,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
+
+    companion object {
+        /** Höchstzahl Bilder pro Nachricht. */
+        const val MAX_IMAGES = 6
+        /** Höchstzahl Bilder pro Anfrage an die KI (über den ganzen Verlauf). */
+        private const val MAX_API_IMAGES = 8
+    }
 
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
@@ -57,7 +65,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun newChat() {
         stop()
-        _state.update { it.copy(current = null, attachedImage = null, error = null) }
+        _state.update { it.copy(current = null, attachedImages = emptyList(), error = null) }
     }
 
     fun open(conversation: Conversation) {
@@ -77,15 +85,38 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun reportError(message: String) = _state.update { it.copy(error = message) }
 
-    fun attachImage(uri: Uri) {
+    fun attachImage(uri: Uri) = attachImages(listOf(uri))
+
+    /** Ein oder mehrere Bilder an die nächste Nachricht anhängen (höchstens [MAX_IMAGES]). */
+    fun attachImages(uris: List<Uri>) {
+        if (uris.isEmpty()) return
         viewModelScope.launch {
-            val path = runCatching { withContext(Dispatchers.IO) { ImageUtils.importImage(app, uri) } }
-            path.onSuccess { p -> _state.update { it.copy(attachedImage = p) } }
-                .onFailure { e -> _state.update { it.copy(error = e.message ?: "Bild konnte nicht geladen werden.") } }
+            val free = MAX_IMAGES - _state.value.attachedImages.size
+            if (free <= 0) {
+                _state.update { it.copy(error = "Höchstens $MAX_IMAGES Bilder pro Nachricht.") }
+                return@launch
+            }
+            val paths = mutableListOf<String>()
+            var failed = 0
+            for (uri in uris.take(free)) {
+                runCatching { withContext(Dispatchers.IO) { ImageUtils.importImage(app, uri) } }
+                    .onSuccess { paths += it }
+                    .onFailure { failed++ }
+            }
+            _state.update {
+                it.copy(
+                    attachedImages = (it.attachedImages + paths).take(MAX_IMAGES),
+                    error = when {
+                        uris.size > free -> "Höchstens $MAX_IMAGES Bilder pro Nachricht – die übrigen wurden nicht übernommen."
+                        failed > 0 -> "$failed Bild(er) konnten nicht geladen werden."
+                        else -> it.error
+                    }
+                )
+            }
         }
     }
 
-    fun removeImage() = _state.update { it.copy(attachedImage = null) }
+    fun removeImage(path: String) = _state.update { it.copy(attachedImages = it.attachedImages - path) }
 
     /** Letzte Antwort neu erzeugen. */
     fun regenerate() {
@@ -94,7 +125,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         val idx = conv.messages.indexOfLast { it.role == Role.USER }
         if (idx < 0) return
         val user = conv.messages[idx]
-        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImage = user.imagePath) }
+        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImages = user.allImages) }
         send(user.text)
     }
 
@@ -105,7 +136,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         val idx = conv.messages.indexOfFirst { it.id == messageId }
         if (idx < 0) return
         val original = conv.messages[idx]
-        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImage = original.imagePath) }
+        _state.update { it.copy(current = conv.copy(messages = conv.messages.take(idx)), attachedImages = original.allImages) }
         send(newText)
     }
 
@@ -141,8 +172,8 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
     }
 
     fun send(text: String) {
-        val image = _state.value.attachedImage
-        if ((text.isBlank() && image == null) || _state.value.streaming) return
+        val images = _state.value.attachedImages
+        if ((text.isBlank() && images.isEmpty()) || _state.value.streaming) return
 
         job = viewModelScope.launch {
             val settings = app.settings.current()
@@ -155,8 +186,11 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             val model = if (mode == ChatMode.CODE) settings.codeModel else settings.chatModel
             val userMessage = ChatMessage(
                 role = Role.USER,
-                text = text.trim().ifEmpty { "Beschreibe dieses Bild." },
-                imagePath = image,
+                text = text.trim().ifEmpty {
+                    if (images.size > 1) "Beschreibe diese ${images.size} Bilder und was sie verbindet." else "Beschreibe dieses Bild."
+                },
+                imagePath = images.firstOrNull(),
+                imagePaths = if (images.size > 1) images else emptyList(),
             )
             val assistant = ChatMessage(role = Role.ASSISTANT, text = "")
             val base = _state.value.current ?: Conversation(
@@ -170,7 +204,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 model = model,
                 updatedAt = System.currentTimeMillis(),
             )
-            _state.update { it.copy(current = conversation, attachedImage = null, streaming = true, error = null) }
+            _state.update { it.copy(current = conversation, attachedImages = emptyList(), streaming = true, error = null) }
 
             val answer = StringBuilder()
             var failed: String? = null
@@ -249,17 +283,26 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     "Heute ist $today."
         }
         val recent = history.filterNot { it.isError && it.role == Role.ASSISTANT }.takeLast(40)
-        // Nur die letzten Bilder mitsenden, um die Anfrage klein zu halten.
-        val imageIds = recent.filter { it.imagePath != null }.takeLast(3).map { it.id }.toSet()
+        // Nur die Bilder der letzten Bild-Nachrichten mitsenden (höchstens 8), um die Anfrage klein zu halten.
+        // Neueste zuerst bedienen, damit die aktuelle Nachricht alle ihre Bilder behält.
+        val imageCount = mutableMapOf<String, Int>()
+        var left = MAX_API_IMAGES
+        recent.filter { it.allImages.isNotEmpty() }.takeLast(3).asReversed().forEach { m ->
+            val n = minOf(left, m.allImages.size)
+            imageCount[m.id] = n
+            left -= n
+        }
         return buildList {
             add(ApiMessage("system", system))
             recent.forEach { m ->
                 if (m.role == Role.ASSISTANT && m.text.isBlank()) return@forEach
+                val urls = m.allImages.take(imageCount[m.id] ?: 0).mapNotNull(ImageUtils::toDataUrl)
                 add(
                     ApiMessage(
                         role = if (m.role == Role.USER) "user" else "assistant",
-                        text = m.text,
-                        imageDataUrl = if (m.id in imageIds) m.imagePath?.let(ImageUtils::toDataUrl) else null,
+                        // Bei mehreren Bildern dem Modell sagen, dass sie zusammengehören
+                        text = if (urls.size > 1) "${m.text}\n\n(${urls.size} Bilder angehängt – Bild 1 bis ${urls.size}, gemeinsam betrachten.)" else m.text,
+                        extraImages = urls,
                     )
                 )
             }

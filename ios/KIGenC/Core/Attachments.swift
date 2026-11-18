@@ -162,21 +162,62 @@ enum AttachmentLoader {
         return nil
     }
 
-    /// Fasst Anhänge für die KI zusammen: Text für die Nachricht, Bilder als Data-URLs.
-    static func prompt(for attachments: [Attachment]) -> (String, [String]) {
-        var text = ""
-        var images: [String] = []
-        for a in attachments {
-            switch a.kind {
-            case .file where !a.text.isEmpty:
-                text += "\n\n--- Datei: \(a.name) ---\n\(a.text)"
-            case .video:
-                text += "\n\n[Video „\(a.name)“: \(a.images.count) Einzelbilder angehängt]"
-                images += a.images.compactMap { $0.dataURL }
-            default:
-                images += a.images.compactMap { $0.dataURL }
+    /// Verteilt höchstens `max` Bilder gleichmäßig auf alle Anhänge (reihum), damit kein Anhang wegfällt.
+    /// Ergebnis: je Anhang die Indizes der mitgesendeten Bilder (gleichmäßig über den Anhang verteilt).
+    static func planImages(_ attachments: [Attachment], max: Int) -> [[Int]] {
+        var take = Array(repeating: 0, count: attachments.count)
+        var used = 0
+        var progress = true
+        while used < max && progress {
+            progress = false
+            for i in attachments.indices where used < max && take[i] < attachments[i].images.count {
+                take[i] += 1
+                used += 1
+                progress = true
             }
         }
-        return (text, Array(images.prefix(8)))
+        return attachments.indices.map { i in
+            let total = attachments[i].images.count, n = take[i]
+            if n <= 0 { return [] }
+            if n >= total { return Array(0..<total) }
+            if n == 1 { return [total / 2] }
+            return (0..<n).map { k in Int((Double(k) * Double(total - 1) / Double(n - 1)).rounded()) }
+        }
+    }
+
+    /// Fasst Anhänge für die KI zusammen: Text für die Nachricht, Bilder als Data-URLs.
+    /// Jeder Anhang wird benannt und seinen Bildnummern zugeordnet, damit die KI alle gemeinsam auswerten kann.
+    static func prompt(for attachments: [Attachment], maxImages: Int = 8) -> (String, [String]) {
+        var text = ""
+        var images: [String] = []
+        if attachments.count > 1 {
+            text += "\n\nEs sind \(attachments.count) Anhänge beigefügt. Berücksichtige ALLE gemeinsam: verbinde, vergleiche und führe ihre Inhalte zusammen, wie es die Aufgabe verlangt, und nenne bei Bedarf, aus welchem Anhang eine Angabe stammt."
+        }
+        let plan = planImages(attachments, max: maxImages)
+        for (i, a) in attachments.enumerated() {
+            let urls = plan[i].compactMap { a.images[$0].dataURL }
+            let kind: String
+            switch a.kind {
+            case .image: kind = "Foto"
+            case .video: kind = "Video"
+            case .file: kind = "Datei"
+            }
+            var head = "\n\n--- Anhang \(i + 1): \(kind) „\(a.name)“"
+            if a.kind == .video { head += " (\(a.images.count) Standbilder in zeitlicher Reihenfolge)" }
+            if !urls.isEmpty {
+                head += urls.count == 1 ? " – Bild \(images.count + 1)" : " – Bilder \(images.count + 1)–\(images.count + urls.count)"
+                if urls.count < a.images.count { head += " (\(urls.count) von \(a.images.count) mitgesendet)" }
+            }
+            text += head + " ---\n"
+            if a.kind == .file && !a.text.isEmpty {
+                text += a.text
+            } else if urls.isEmpty {
+                text += "(Bild konnte wegen der Höchstzahl nicht mitgesendet werden)"
+            } else {
+                text += "(siehe die genannten Bilder)"
+            }
+            images += urls
+        }
+        return (text, images)
     }
 }

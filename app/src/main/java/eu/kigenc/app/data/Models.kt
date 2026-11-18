@@ -15,7 +15,12 @@ data class ChatMessage(
     val imagePath: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val isError: Boolean = false,
+    /** Mehrere Bilder in einer Nachricht (optional; [imagePath] bleibt das erste – für ältere Versionen lesbar). */
+    val imagePaths: List<String> = emptyList(),
 ) {
+    /** Alle Bilder dieser Nachricht (neues Feld oder – bei älteren Chats – das eine Bild). */
+    val allImages: List<String> get() = imagePaths.ifEmpty { listOfNotNull(imagePath) }
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
         .put("role", role.name)
@@ -23,6 +28,7 @@ data class ChatMessage(
         .put("imagePath", imagePath ?: JSONObject.NULL)
         .put("createdAt", createdAt)
         .put("isError", isError)
+        .apply { if (imagePaths.size > 1) put("imagePaths", JSONArray().apply { imagePaths.forEach { put(it) } }) }
 
     companion object {
         fun fromJson(o: JSONObject) = ChatMessage(
@@ -32,6 +38,7 @@ data class ChatMessage(
             imagePath = if (o.isNull("imagePath")) null else o.optString("imagePath"),
             createdAt = o.optLong("createdAt", System.currentTimeMillis()),
             isError = o.optBoolean("isError", false),
+            imagePaths = o.optJSONArray("imagePaths")?.let { arr -> List(arr.length()) { arr.optString(it) }.filter { it.isNotBlank() } }.orEmpty(),
         )
     }
 }

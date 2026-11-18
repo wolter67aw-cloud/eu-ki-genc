@@ -116,9 +116,24 @@ struct PhotoEditorView: View {
                     }
                     .card()
 
+                    if photos.count > 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Zu einem Bild zusammenfügen").font(.headline)
+                            HStack(spacing: 8) {
+                                ForEach(CollageLayout.allCases, id: \.self) { l in
+                                    Button { combine(l) } label: { Text(l.title).font(.callout).frame(maxWidth: .infinity) }
+                                        .buttonStyle(.bordered)
+                                }
+                            }
+                            Text("Verbindet alle \(photos.count) Fotos ohne KI zu einem neuen Foto – Gesichter bleiben unverändert. Danach kannst du es filtern, speichern oder mit KI weiter bearbeiten.")
+                                .font(.caption).foregroundStyle(Theme.secondaryText)
+                        }
+                        .card()
+                    }
+
                     VStack(alignment: .leading, spacing: 10) {
                         Text("KI-Bearbeitung").font(.headline)
-                        Text(settings.canEditFaithfully ? "Gesichtstreu mit FLUX Kontext." : "Ohne Black-Forest-Labs-Schlüssel wird ein neues, ähnliches Bild erzeugt (Gesichter können abweichen).")
+                        Text(settings.canEditFaithfully ? "Gesichtstreu mit FLUX Kontext – mehrere Fotos werden echt zu einem Bild kombiniert." : "Ohne Black-Forest-Labs-Schlüssel wird ein neues, ähnliches Bild erzeugt (Gesichter können abweichen). Tipp: Fotos zuerst oben „zusammenfügen“ – dann bleiben alle Personen original erhalten.")
                             .font(.caption).foregroundStyle(Theme.secondaryText)
                         if photos.count > 1 {
                             Toggle(isOn: $useAll) {
@@ -188,6 +203,15 @@ struct PhotoEditorView: View {
         aiImage = nil
         apply()
         if edited == nil { edited = original }
+    }
+
+    /// Alle Fotos ohne KI zu einem neuen Foto zusammenfügen und dieses auswählen.
+    private func combine(_ layout: CollageLayout) {
+        guard photos.count > 1 else { return }
+        let image = Collage.make(photos, layout: layout)
+        photos.append(image)
+        select(photos.count - 1)
+        aiImage = nil
     }
 
     private func removePhoto(_ i: Int) {
@@ -816,5 +840,71 @@ struct ResultsView: View {
             .onDelete { idx in idx.map { store.results[$0] }.forEach(store.delete) }
         }
         .clearListBackground()
+    }
+}
+
+/// Anordnung beim Zusammenfügen mehrerer Fotos.
+enum CollageLayout: CaseIterable {
+    case side, stack, grid
+    var title: String {
+        switch self {
+        case .side: return "Nebeneinander"
+        case .stack: return "Untereinander"
+        case .grid: return "Raster"
+        }
+    }
+}
+
+/// Fügt Fotos ohne KI zu einem Bild zusammen (weißer Abstand, Raster mittig zugeschnitten).
+enum Collage {
+    static func make(_ images: [UIImage], layout: CollageLayout) -> UIImage {
+        let gap: CGFloat = 8
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        func drawFill(_ img: UIImage, in rect: CGRect) {
+            // mittig zuschneiden, damit das Foto die Kachel füllt
+            let scale = max(rect.width / img.size.width, rect.height / img.size.height)
+            let w = img.size.width * scale, h = img.size.height * scale
+            UIGraphicsGetCurrentContext()?.saveGState()
+            UIRectClip(rect)
+            img.draw(in: CGRect(x: rect.midX - w / 2, y: rect.midY - h / 2, width: w, height: h))
+            UIGraphicsGetCurrentContext()?.restoreGState()
+        }
+        switch layout {
+        case .side:
+            var h = min(images.map(\.size.height).min() ?? 1000, 1600)
+            let ratio = images.map { $0.size.width / max(1, $0.size.height) }.reduce(0, +)
+            h = min(h, 6000 / max(ratio, 0.01)) // Gesamtbreite begrenzen (Speicher)
+            let widths = images.map { max(1, $0.size.width * h / max(1, $0.size.height)) }
+            let size = CGSize(width: widths.reduce(0, +) + gap * CGFloat(images.count - 1), height: h)
+            return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+                UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+                var x: CGFloat = 0
+                for (i, img) in images.enumerated() { img.draw(in: CGRect(x: x, y: 0, width: widths[i], height: h)); x += widths[i] + gap }
+            }
+        case .stack:
+            var w = min(images.map(\.size.width).min() ?? 1000, 1600)
+            let ratio = images.map { $0.size.height / max(1, $0.size.width) }.reduce(0, +)
+            w = min(w, 6000 / max(ratio, 0.01)) // Gesamthöhe begrenzen (Speicher)
+            let heights = images.map { max(1, $0.size.height * w / max(1, $0.size.width)) }
+            let size = CGSize(width: w, height: heights.reduce(0, +) + gap * CGFloat(images.count - 1))
+            return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+                UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+                var y: CGFloat = 0
+                for (i, img) in images.enumerated() { img.draw(in: CGRect(x: 0, y: y, width: w, height: heights[i])); y += heights[i] + gap }
+            }
+        case .grid:
+            let cols = images.count <= 4 ? 2 : 3
+            let rows = (images.count + cols - 1) / cols
+            let cell: CGFloat = 800
+            let size = CGSize(width: CGFloat(cols) * cell + gap * CGFloat(cols - 1), height: CGFloat(rows) * cell + gap * CGFloat(rows - 1))
+            return UIGraphicsImageRenderer(size: size, format: format).image { ctx in
+                UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+                for (i, img) in images.enumerated() {
+                    let r = CGRect(x: CGFloat(i % cols) * (cell + gap), y: CGFloat(i / cols) * (cell + gap), width: cell, height: cell)
+                    drawFill(img, in: r)
+                }
+            }
+        }
     }
 }

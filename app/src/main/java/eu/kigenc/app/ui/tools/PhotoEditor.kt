@@ -146,6 +146,9 @@ fun buildColorMatrix(a: PhotoAdjust): FloatArray {
     return m.array
 }
 
+/** Anordnung beim Zusammenfügen mehrerer Fotos zu einem Bild. */
+enum class CollageLayout(val label: String) { SIDE("Nebeneinander"), STACK("Untereinander"), GRID("Raster") }
+
 class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
     /** Alle ausgewählten Fotos (Pfade); [source] ist das gerade angezeigte. */
     val sources = MutableStateFlow<List<String>>(emptyList())
@@ -192,6 +195,88 @@ class PhotoEditorViewModel(app: KiApp) : AiToolViewModel(app) {
             select(selected.value.coerceAtMost(list.lastIndex))
         }
     }
+    /**
+     * Fügt alle Fotos (ohne KI, ohne Qualitätsverlust bei Gesichtern) zu EINEM Bild zusammen.
+     * Das Ergebnis wird als neues Foto hinten angehängt und ausgewählt – danach kann es gefiltert,
+     * gespeichert oder mit KI weiterbearbeitet werden.
+     */
+    fun combine(layout: CollageLayout) {
+        val list = sources.value
+        if (list.size < 2 || busy.value) return
+        viewModelScope.launch {
+            busy.value = true
+            try {
+                val path = withContext(Dispatchers.IO) {
+                    // Bei vielen Fotos halbe Auflösung laden (Speicher schonen)
+                    val opts = BitmapFactory.Options().apply { inSampleSize = if (list.size > 4) 2 else 1 }
+                    val bitmaps = list.mapNotNull { BitmapFactory.decodeFile(it, opts) }
+                    if (bitmaps.size < 2) error("Fotos konnten nicht gelesen werden.")
+                    val out = buildCollage(bitmaps, layout)
+                    ImageUtils.saveImage(app, out).also { out.recycle(); bitmaps.forEach(Bitmap::recycle) }
+                }
+                sources.value = sources.value + path
+                aiImage.value = null
+                select(sources.value.lastIndex)
+                message.value = "${list.size} Fotos zu einem Bild zusammengefügt (Foto ${sources.value.size}). " +
+                    "Du kannst es jetzt filtern, speichern oder mit KI bearbeiten."
+            } catch (e: Exception) {
+                message.value = "Zusammenfügen fehlgeschlagen: ${e.message ?: "unbekannter Fehler"}"
+            } finally {
+                busy.value = false
+            }
+        }
+    }
+
+    private fun buildCollage(bitmaps: List<Bitmap>, layout: CollageLayout): Bitmap {
+        val gap = 8
+        val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        fun draw(c: Canvas, b: Bitmap, l: Int, t: Int, w: Int, h: Int, crop: Boolean) {
+            val src = if (crop) {
+                // mittig zuschneiden, damit das Foto die Kachel füllt
+                val scale = maxOf(w.toFloat() / b.width, h.toFloat() / b.height)
+                val cw = (w / scale).toInt().coerceAtMost(b.width)
+                val ch = (h / scale).toInt().coerceAtMost(b.height)
+                android.graphics.Rect((b.width - cw) / 2, (b.height - ch) / 2, (b.width + cw) / 2, (b.height + ch) / 2)
+            } else null
+            c.drawBitmap(b, src, android.graphics.Rect(l, t, l + w, t + h), paint)
+        }
+        return when (layout) {
+            CollageLayout.SIDE -> {
+                val ratio = bitmaps.sumOf { it.width.toDouble() / it.height }
+                // Gesamtbreite begrenzen (Speicher)
+                val h = minOf(bitmaps.minOf { it.height }, 1600, (6000 / ratio).toInt()).coerceAtLeast(1)
+                val widths = bitmaps.map { (it.width * h.toFloat() / it.height).toInt().coerceAtLeast(1) }
+                val out = Bitmap.createBitmap(widths.sum() + gap * (bitmaps.size - 1), h, Bitmap.Config.ARGB_8888)
+                val c = Canvas(out).apply { drawColor(android.graphics.Color.WHITE) }
+                var x = 0
+                bitmaps.forEachIndexed { i, b -> draw(c, b, x, 0, widths[i], h, false); x += widths[i] + gap }
+                out
+            }
+            CollageLayout.STACK -> {
+                val ratio = bitmaps.sumOf { it.height.toDouble() / it.width }
+                // Gesamthöhe begrenzen (Speicher)
+                val w = minOf(bitmaps.minOf { it.width }, 1600, (6000 / ratio).toInt()).coerceAtLeast(1)
+                val heights = bitmaps.map { (it.height * w.toFloat() / it.width).toInt().coerceAtLeast(1) }
+                val out = Bitmap.createBitmap(w, heights.sum() + gap * (bitmaps.size - 1), Bitmap.Config.ARGB_8888)
+                val c = Canvas(out).apply { drawColor(android.graphics.Color.WHITE) }
+                var y = 0
+                bitmaps.forEachIndexed { i, b -> draw(c, b, 0, y, w, heights[i], false); y += heights[i] + gap }
+                out
+            }
+            CollageLayout.GRID -> {
+                val cols = if (bitmaps.size <= 4) 2 else 3
+                val rows = (bitmaps.size + cols - 1) / cols
+                val cell = 800
+                val out = Bitmap.createBitmap(cols * cell + gap * (cols - 1), rows * cell + gap * (rows - 1), Bitmap.Config.ARGB_8888)
+                val c = Canvas(out).apply { drawColor(android.graphics.Color.WHITE) }
+                bitmaps.forEachIndexed { i, b ->
+                    draw(c, b, (i % cols) * (cell + gap), (i / cols) * (cell + gap), cell, cell, true)
+                }
+                out
+            }
+        }
+    }
+
     val version = MutableStateFlow(0)
     val aiImage = MutableStateFlow<File?>(null)
     val aiError = MutableStateFlow<String?>(null)
@@ -516,13 +601,31 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
                         )
                     }
                 }
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Zu einem Bild zusammenfügen", style = MaterialTheme.typography.labelLarge)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                CollageLayout.entries.forEach { l ->
+                                    OutlinedButton(onClick = { vm.combine(l) }, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                        Text(l.label, maxLines = 1)
+                                    }
+                                }
+                            }
+                            Text(
+                                "Verbindet alle ${sources.size} Fotos ohne KI zu einem neuen Foto – Gesichter bleiben unverändert. " +
+                                    "Das Ergebnis kannst du danach filtern, speichern oder mit KI weiter bearbeiten.",
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                 item { HorizontalDivider() }
                 item {
                     Text("KI-Neugestaltung", style = MaterialTheme.typography.titleMedium)
                     Text(
                         "Mit Black-Forest-Labs-Schlüssel (Optionen → Bildgenerator) wird dein echtes Foto bearbeitet – " +
-                            "Gesichter bleiben erhalten. Ohne Schlüssel malt die KI ein neues Bild nach einer Beschreibung, " +
-                            "Gesichter können dann abweichen.",
+                            "Gesichter bleiben erhalten, mehrere Fotos werden echt zu einem Bild kombiniert. Ohne Schlüssel malt " +
+                            "die KI ein neues Bild nach einer Beschreibung, Gesichter können dann abweichen. Tipp: Fotos zuerst " +
+                            "oben „zusammenfügen“ – dann bleiben alle Personen original erhalten.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

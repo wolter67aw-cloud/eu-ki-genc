@@ -56,7 +56,7 @@ class ChatStore(private val context: Context) {
     }
 
     suspend fun delete(conversation: Conversation) = withContext(Dispatchers.IO) {
-        conversation.messages.mapNotNull { it.imagePath }.forEach { File(it).delete() }
+        conversation.messages.flatMap { it.allImages }.forEach { File(it).delete() }
         File(dir(conversation.mode), "${conversation.id}.json").delete()
     }
 

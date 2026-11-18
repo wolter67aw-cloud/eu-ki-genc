@@ -201,8 +201,8 @@ fun ChatScreen(
     }
 
     // --- Bilder: Galerie & Kamera ---
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        uri?.let(vm::attachImage)
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ChatViewModel.MAX_IMAGES)) { uris ->
+        vm.attachImages(uris)
     }
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -312,7 +312,7 @@ fun ChatScreen(
             InputBar(
                 text = input,
                 onTextChange = { input = it },
-                attachedImage = state.attachedImage,
+                attachedImages = state.attachedImages,
                 streaming = state.streaming,
                 allowImages = !isCode,
                 placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag KI-GenC …",
@@ -653,7 +653,9 @@ private fun MessageItem(
 ) {
     if (message.role == Role.USER) {
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-            message.imagePath?.let { path ->
+            val images = message.allImages
+            if (images.size == 1) {
+                val path = images.first()
                 val bitmap = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
                 if (bitmap != null) {
                     Image(
@@ -664,6 +666,26 @@ private fun MessageItem(
                             .size(180.dp)
                             .clip(RoundedCornerShape(16.dp))
                     )
+                }
+            } else if (images.size > 1) {
+                // Mehrere Bilder als kleine Kacheln
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.padding(bottom = 6.dp).widthIn(max = 280.dp)
+                ) {
+                    images.forEachIndexed { i, path ->
+                        val bitmap = remember(path) {
+                            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap()
+                        }
+                        if (bitmap != null) {
+                            Image(
+                                bitmap, contentDescription = "Angehängtes Bild ${i + 1} von ${images.size}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(88.dp).clip(RoundedCornerShape(12.dp))
+                            )
+                        }
+                    }
                 }
             }
             Surface(
@@ -749,11 +771,11 @@ private fun MessageItem(
 private fun InputBar(
     text: String,
     onTextChange: (String) -> Unit,
-    attachedImage: String?,
+    attachedImages: List<String>,
     streaming: Boolean,
     allowImages: Boolean,
     placeholder: String,
-    onRemoveImage: () -> Unit,
+    onRemoveImage: (String) -> Unit,
     onPickImage: () -> Unit,
     onCamera: () -> Unit,
     onMic: () -> Unit,
@@ -763,24 +785,42 @@ private fun InputBar(
 ) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow, modifier = modifier) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-            if (attachedImage != null) {
-                val bitmap = remember(attachedImage) { BitmapFactory.decodeFile(attachedImage)?.asImageBitmap() }
-                Box(Modifier.padding(bottom = 8.dp)) {
-                    if (bitmap != null) {
-                        Image(
-                            bitmap, contentDescription = "Ausgewähltes Bild",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier
-                                .size(84.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                        )
+            if (attachedImages.isNotEmpty()) {
+                androidx.compose.foundation.lazy.LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                ) {
+                    items(attachedImages.size) { i ->
+                        val path = attachedImages[i]
+                        val bitmap = remember(path) {
+                            BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 })?.asImageBitmap()
+                        }
+                        Box {
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap, contentDescription = "Ausgewähltes Bild ${i + 1}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(84.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                )
+                            }
+                            FilledIconButton(
+                                onClick = { onRemoveImage(path) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(26.dp)
+                            ) { Icon(Icons.Filled.Close, "Bild ${i + 1} entfernen", Modifier.size(16.dp)) }
+                        }
                     }
-                    FilledIconButton(
-                        onClick = onRemoveImage,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .size(26.dp)
-                    ) { Icon(Icons.Filled.Close, "Bild entfernen", Modifier.size(16.dp)) }
+                }
+                if (attachedImages.size > 1) {
+                    Text(
+                        "${attachedImages.size} Bilder werden zusammen an die KI geschickt",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
                 }
             }
             Row(verticalAlignment = Alignment.Bottom) {
@@ -792,7 +832,7 @@ private fun InputBar(
                         }
                         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                             DropdownMenuItem(
-                                text = { Text("Aus Galerie") },
+                                text = { Text("Aus Galerie (auch mehrere)") },
                                 leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) },
                                 onClick = { menu = false; onPickImage() }
                             )
@@ -823,7 +863,7 @@ private fun InputBar(
                     streaming -> FilledIconButton(onClick = onStop, modifier = Modifier.size(52.dp)) {
                         Icon(Icons.Filled.Stop, contentDescription = "Stopp")
                     }
-                    text.isBlank() && attachedImage == null -> FilledIconButton(onClick = onMic, modifier = Modifier.size(52.dp)) {
+                    text.isBlank() && attachedImages.isEmpty() -> FilledIconButton(onClick = onMic, modifier = Modifier.size(52.dp)) {
                         Icon(Icons.Filled.Mic, contentDescription = "Spracheingabe")
                     }
                     else -> FilledIconButton(onClick = onSend, modifier = Modifier.size(52.dp)) {

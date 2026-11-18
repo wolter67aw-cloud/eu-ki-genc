@@ -154,15 +154,60 @@ object Attachments {
         error("Word-Datei konnte nicht gelesen werden.")
     }
 
-    /** Baut den Nutzertext inklusive Anhängen zusammen. */
-    fun composePrompt(userText: String, attachments: List<Attachment>): String = buildString {
+    /**
+     * Verteilt höchstens [max] Bilder gleichmäßig auf alle Anhänge (reihum), damit kein Anhang wegfällt.
+     * Ergebnis: je Anhang die mitgesendeten Bilder (in Anhang-Reihenfolge).
+     */
+    fun planImages(attachments: List<Attachment>, max: Int): List<List<String>> {
+        val take = IntArray(attachments.size)
+        var used = 0
+        var progress = true
+        while (used < max && progress) {
+            progress = false
+            for (i in attachments.indices) {
+                if (used >= max) break
+                if (take[i] < attachments[i].images.size) {
+                    take[i]++
+                    used++
+                    progress = true
+                }
+            }
+        }
+        return attachments.mapIndexed { i, a -> spread(a.images, take[i]) }
+    }
+
+    /** [n] Bilder gleichmäßig über die Liste verteilt (z. B. Anfang, Mitte, Ende eines Videos). */
+    private fun spread(images: List<String>, n: Int): List<String> = when {
+        n <= 0 -> emptyList()
+        n >= images.size -> images
+        n == 1 -> listOf(images[images.size / 2])
+        else -> (0 until n).map { k -> images[(k * (images.size - 1).toDouble() / (n - 1)).roundToInt()] }.distinct()
+    }
+
+    /** Baut den Nutzertext inklusive Anhängen zusammen; [maxImages] wie bei [planImages]. */
+    fun composePrompt(userText: String, attachments: List<Attachment>, maxImages: Int = 8): String = buildString {
         append(userText.trim())
+        if (attachments.size > 1) {
+            append("\n\nEs sind ${attachments.size} Anhänge beigefügt. Berücksichtige ALLE gemeinsam: verbinde, vergleiche und " +
+                "führe ihre Inhalte zusammen, wie es die Aufgabe verlangt, und nenne bei Bedarf, aus welchem Anhang eine Angabe stammt.")
+        }
+        val plan = planImages(attachments, maxImages)
+        var imageNo = 0
         attachments.forEachIndexed { i, a ->
             append("\n\n--- Anhang ${i + 1}: ${a.kind.label} „${a.name}“")
             if (a.note.isNotBlank()) append(" (${a.note})")
+            val n = plan[i].size
+            if (n > 0) {
+                append(if (n == 1) " – Bild ${imageNo + 1}" else " – Bilder ${imageNo + 1}–${imageNo + n}")
+                if (n < a.images.size) append(" ($n von ${a.images.size} mitgesendet)")
+                imageNo += n
+            }
             append(" ---\n")
-            if (a.text != null) append(a.text)
-            else append("(siehe beigefügte Bilder)")
+            when {
+                a.text != null -> append(a.text)
+                n > 0 -> append("(siehe die genannten Bilder)")
+                else -> append("(Bild konnte wegen der Höchstzahl nicht mitgesendet werden)")
+            }
         }
     }
 }

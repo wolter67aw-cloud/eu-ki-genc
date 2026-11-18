@@ -150,22 +150,9 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
         /** Höchstzahl Bilder pro Anfrage – gleichmäßig auf alle Anhänge verteilt. */
         const val MAX_IMAGES = 8
 
-        fun selectImages(attachments: List<Attachment>, max: Int): List<String> {
-            val queues = attachments.map { it.images.toMutableList() }.filter { it.isNotEmpty() }
-            val result = mutableListOf<String>()
-            var progress = true
-            while (result.size < max && progress) {
-                progress = false
-                for (q in queues) {
-                    if (result.size >= max) break
-                    if (q.isNotEmpty()) {
-                        result += q.removeAt(0)
-                        progress = true
-                    }
-                }
-            }
-            return result
-        }
+        /** Bilder gleichmäßig auf alle Anhänge verteilt, in Anhang-Reihenfolge (passend zur Nummerierung im Text). */
+        fun selectImages(attachments: List<Attachment>, max: Int): List<String> =
+            Attachments.planImages(attachments, max).flatten()
     }
 
     private val _state = MutableStateFlow(StudioUiState())
@@ -282,7 +269,8 @@ class StudioViewModel(private val app: KiApp) : ViewModel() {
                             Attachments.composePrompt(
                                 (if (template.id == "translate" && targetLanguage != null) "Übersetze ins $targetLanguage:\n\n" else "") +
                                     input.trim().ifBlank { "Bitte bearbeite die Anhänge entsprechend deiner Aufgabe." },
-                                attachments
+                                attachments,
+                                MAX_IMAGES
                             ),
                             extraImages = selectImages(attachments, MAX_IMAGES)
                         )
