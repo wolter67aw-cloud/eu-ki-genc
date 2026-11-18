@@ -144,6 +144,37 @@ struct ChatView: View {
             VStack(spacing: 16) {
                 Image(Theme.current.symbol ?? "Logo").resizable().scaledToFit().frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 22)).padding(.top, 30)
                 Text("Wie kann ich helfen?").font(.title2.bold())
+                // Schnellwahl: angeheftete Unterhaltungen direkt fortsetzen (zuletzt genutzt zuerst)
+                let pinned = store.conversations.filter { $0.pinned && !$0.messages.isEmpty }
+                if !pinned.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Angeheftet", systemImage: "pin.fill")
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.cyan)
+                            .accessibilityAddTraits(.isHeader)
+                        ForEach(pinned.prefix(6)) { c in
+                            Button {
+                                model.stop()
+                                model.conversation = c
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.cyan)
+                                    Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
+                                    Spacer(minLength: 0)
+                                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.secondaryText)
+                                }
+                            }
+                            .card()
+                            .accessibilityLabel("Angeheftete Unterhaltung öffnen: \(c.title)")
+                        }
+                        if pinned.count > 6 {
+                            Text("Weitere \(pinned.count - 6) im Verlauf").font(.caption).foregroundStyle(Theme.secondaryText)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("Vorschläge").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ForEach(["Erkläre mir Quantencomputer in einfachen Worten", "Schreibe eine freundliche Absage-E-Mail", "Plane mir eine Woche gesunde Ernährung", "Was ist auf diesem Foto zu sehen?"], id: \.self) { s in
                     Button { model.input = s; focused = true } label: {
                         Text(s).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.text)

@@ -107,6 +107,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -331,6 +334,8 @@ fun ChatScreen(
                 isCode = isCode,
                 hasKey = settings?.hasKey ?: true,
                 onSuggestion = { input = it },
+                pinned = state.conversations.filter { it.pinned && it.messages.isNotEmpty() },
+                onOpenPinned = { vm.open(it); input = "" },
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
@@ -524,8 +529,18 @@ fun ChatScreen(
     }
 }
 
+/** Höchstzahl angehefteter Unterhaltungen in der Schnellwahl der leeren Chat-Ansicht. */
+private const val MAX_PINNED_QUICK = 6
+
 @Composable
-private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) -> Unit, modifier: Modifier) {
+private fun EmptyState(
+    isCode: Boolean,
+    hasKey: Boolean,
+    onSuggestion: (String) -> Unit,
+    pinned: List<Conversation>,
+    onOpenPinned: (Conversation) -> Unit,
+    modifier: Modifier,
+) {
     val suggestions = if (isCode) listOf(
         "Schreibe eine Kotlin-Funktion, die E-Mail-Adressen validiert",
         "Erkläre mir diesen Code Schritt für Schritt:",
@@ -546,7 +561,9 @@ private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) 
         "Gib mir 5 kreative Ideen für ein Vereinsfest",
     )
     Column(
-        modifier.padding(24.dp),
+        modifier
+            .verticalScroll(rememberScrollState())
+            .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -569,6 +586,48 @@ private fun EmptyState(isCode: Boolean, hasKey: Boolean, onSuggestion: (String) 
             color = if (hasKey) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
         )
         Spacer(Modifier.height(24.dp))
+        // Schnellwahl: angeheftete Unterhaltungen direkt fortsetzen (Reihenfolge wie im Verlauf: zuletzt genutzt zuerst)
+        if (pinned.isNotEmpty()) {
+            Text(
+                "Angeheftet",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.semantics { heading() }
+            )
+            Spacer(Modifier.height(6.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                pinned.take(MAX_PINNED_QUICK).forEach { c ->
+                    AssistChip(
+                        onClick = { onOpenPinned(c) },
+                        label = { Text(c.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        leadingIcon = {
+                            Icon(Icons.Filled.PushPin, contentDescription = null, modifier = Modifier.size(16.dp))
+                        },
+                        modifier = Modifier
+                            .widthIn(max = 260.dp)
+                            .semantics { contentDescription = "Angeheftete Unterhaltung öffnen: ${c.title}" }
+                    )
+                }
+            }
+            if (pinned.size > MAX_PINNED_QUICK) {
+                Text(
+                    "Weitere ${pinned.size - MAX_PINNED_QUICK} im Verlauf",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+            Text(
+                "Vorschläge",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.semantics { heading() }
+            )
+            Spacer(Modifier.height(6.dp))
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalArrangement = Arrangement.spacedBy(4.dp),
