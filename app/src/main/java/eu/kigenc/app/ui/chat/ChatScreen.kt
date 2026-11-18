@@ -174,6 +174,12 @@ fun ChatScreen(
             vm.clearError()
         }
     }
+    LaunchedEffect(state.notice) {
+        state.notice?.let {
+            snackbar.showSnackbar(it)
+            vm.clearNotice()
+        }
+    }
 
     LaunchedEffect(shared) {
         if (shared != null) {

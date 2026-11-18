@@ -38,6 +38,10 @@ Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung der von dir angef
 - API-Schlüssel werden mit dem **Android-Keystore verschlüsselt** gespeichert.
 - Unterhaltungen, Aufgaben, erzeugte Bilder, Werkzeug-Ergebnisse und ein **Fehlerprotokoll** liegen im privaten App-Speicher.
 - Das Fehlerprotokoll enthält technische Fehlermeldungen (keine Schlüssel) und wird nur geteilt, wenn du es selbst tust.
+- **Projekte** (Anweisungen und Wissen) und das **Gedächtnis** (Fakten, die die KI sich über dich merkt) liegen ebenfalls nur im
+  privaten App-Speicher. Sie werden bei Chat-Anfragen als Teil der Anfrage an Mistral AI übertragen. Das Gedächtnis lässt sich unter
+  **Optionen → Gedächtnis** einsehen, bearbeiten, abschalten und vollständig löschen; beim automatischen Lernen schickt die App deine
+  Nachricht zusätzlich einmal an ein kleines Mistral-Modell, um Fakten zu erkennen.
 - Du kannst alles unter **Optionen → Alle Unterhaltungen & Bilder löschen** entfernen oder die App deinstallieren.
 
 ## 5. Berechtigungen

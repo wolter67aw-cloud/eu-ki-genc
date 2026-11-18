@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -109,6 +110,8 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
+    var showMemory by remember { mutableStateOf(false) }
+    if (showMemory) MemoryDialog(onDismiss = { showMemory = false })
     val updateState by app.updates.state.collectAsStateWithLifecycle()
 
     var keyInput by remember { mutableStateOf("") }
@@ -318,6 +321,31 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 SwitchRow(Icons.Outlined.RecordVoiceOver, "Antworten automatisch vorlesen", "Nutzt die Sprachausgabe deines Geräts", settings.autoSpeak) {
                     scope.launch { app.settings.setAutoSpeak(it) }
                 }
+            }
+
+            item { SectionTitle("Gedächtnis") }
+            item {
+                SwitchRow(
+                    Icons.Outlined.Psychology, "Gedächtnis nutzen",
+                    "Die KI kennt in jedem Chat, was sie sich über dich gemerkt hat. Sag z. B. „Merk dir, dass …“",
+                    settings.memoryEnabled
+                ) { scope.launch { app.settings.setMemoryEnabled(it) } }
+            }
+            if (settings.memoryEnabled) {
+                item {
+                    SwitchRow(
+                        Icons.Outlined.AutoAwesome, "Automatisch dazulernen",
+                        "Erkennt in deinen Nachrichten Dinge wie Name, Beruf oder Vorlieben – keine sensiblen Angaben",
+                        settings.memoryAuto
+                    ) { scope.launch { app.settings.setMemoryAuto(it) } }
+                }
+            }
+            item {
+                val facts by app.memory.facts.collectAsStateWithLifecycle()
+                SettingRow(
+                    Icons.Outlined.Psychology, "Gemerktes ansehen und bearbeiten",
+                    if (facts.isEmpty()) "Noch nichts gemerkt" else "${facts.size} Einträge – nur auf diesem Gerät gespeichert",
+                ) { showMemory = true }
             }
 
             item { SectionTitle("Musik beim Start") }

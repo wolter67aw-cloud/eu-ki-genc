@@ -99,6 +99,84 @@ struct Project: Codable, Identifiable, Equatable {
     }
 }
 
+/// Ein gemerkter Fakt über den Nutzer (Gedächtnis).
+struct MemoryFact: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var text: String
+    var created = Date()
+}
+
+/// Gedächtnis wie bei Claude: Fakten über den Nutzer, die in jedem Chat mitgegeben werden. Nur auf dem Gerät.
+@MainActor
+final class MemoryStore: ObservableObject {
+    static let shared = MemoryStore()
+    static let maxFacts = 60
+    @Published private(set) var facts: [MemoryFact] = Store.load([MemoryFact].self, "memory.json") ?? []
+
+    /// Systemtext für die KI (leer, wenn nichts gemerkt).
+    var systemText: String {
+        guard !facts.isEmpty else { return "" }
+        return "\n\nGedächtnis – was du über den Nutzer weißt (nutze es unaufdringlich, wenn es passt; erwähne es nicht ständig):\n"
+            + facts.map { "- \($0.text)" }.joined(separator: "\n")
+    }
+
+    @discardableResult
+    func add(_ text: String) -> Bool {
+        var t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        while t.hasSuffix(".") { t.removeLast() }
+        t = String(t.prefix(200))
+        guard t.count >= 3, !facts.contains(where: { $0.text.caseInsensitiveCompare(t) == .orderedSame }) else { return false }
+        facts.append(MemoryFact(text: t))
+        if facts.count > Self.maxFacts { facts.removeFirst(facts.count - Self.maxFacts) }
+        save()
+        return true
+    }
+
+    func update(_ id: UUID, _ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let i = facts.firstIndex(where: { $0.id == id }) else { return }
+        if t.isEmpty { facts.remove(at: i) } else { facts[i].text = String(t.prefix(200)) }
+        save()
+    }
+
+    func delete(_ id: UUID) { facts.removeAll { $0.id == id }; save() }
+    func clear() { facts = []; save() }
+    private func save() { Store.save(facts, "memory.json") }
+
+    /// „Merk dir …“ / „Merke dir, dass …“ / „Bitte merken: …“ am Anfang einer Nachricht.
+    static func explicitFact(_ message: String) -> String? {
+        let pattern = "^(?:bitte\\s+)?(?:merk(?:e)?\\s+(?:dir|es\\s+dir)|bitte\\s+merken|notier(?:e)?\\s+dir)\\s*[:,]?\\s*(?:dass\\s+)?(.+)$"
+        guard let re = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { return nil }
+        let s = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let m = re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)), let r = Range(m.range(at: 1), in: s) else { return nil }
+        let fact = s[r].trimmingCharacters(in: .whitespacesAndNewlines)
+        return fact.count >= 3 ? fact : nil
+    }
+
+    /// Zieht mit einem sparsamen Modell dauerhafte Fakten aus einer Nachricht und speichert neue. Liefert die Anzahl.
+    func learn(from message: String, explicit: String?, key: String) async -> Int {
+        if explicit == nil && message.count < 15 { return 0 }
+        let known = facts.isEmpty ? "(noch nichts)" : facts.map { "- \($0.text)" }.joined(separator: "\n")
+        let prompt: String
+        if let explicit {
+            prompt = "Der Nutzer einer KI-App möchte ausdrücklich, dass du dir Folgendes über ihn merkst:\n\"\"\"\(explicit.prefix(1000))\"\"\"\nBekannte Fakten:\n\(known)\n\nFormuliere es als 1–2 kurze Fakten in dritter Person auf Deutsch (z. B. „Heißt Andy“, „Mag keine Emojis in Antworten“). Antwort als JSON: {\"facts\": [\"…\"]}"
+        } else {
+            prompt = "Du pflegst ein Gedächtnis über den Nutzer einer KI-App. Bekannte Fakten:\n\(known)\n\nNeue Nachricht des Nutzers:\n\"\"\"\(message.prefix(3000))\"\"\"\n\nGib NUR dauerhafte, persönliche Fakten zurück, die der Nutzer über SICH SELBST klar gesagt hat und die noch nicht bekannt sind (z. B. Name, Wohnort, Beruf, Familie, Haustiere, Vorlieben, Ziele, wie er Antworten haben möchte). KEINE Fragen, Aufgaben, Vermutungen, vorübergehenden Dinge, Gesundheits-, Finanz- oder andere sensible Angaben. Kurz, in dritter Person auf Deutsch (z. B. „Heißt Andy“, „Hat einen Hund namens Bello“). Antwort als JSON: {\"facts\": [\"…\"]} – meist ist die Liste leer."
+        }
+        var list: [String]?
+        if let raw = try? await MistralClient.shared.complete(key: key, model: "mistral-small-latest", messages: [ApiMessage(role: "user", text: prompt)], json: true, temperature: 0),
+           let data = raw.data(using: .utf8),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            list = obj["facts"] as? [String]
+        }
+        var added = 0
+        for f in (list ?? []).prefix(3) where add(f) { added += 1 }
+        // Ausdrücklicher Wunsch, aber nichts erkannt → wörtlich merken
+        if let explicit, added == 0, (list ?? []).isEmpty, add(explicit) { added += 1 }
+        return added
+    }
+}
+
 final class ProjectStore: ObservableObject {
     static let shared = ProjectStore()
     @Published var projects: [Project] = (Store.load([Project].self, "projects.json") ?? []).sorted { $0.updated > $1.updated }

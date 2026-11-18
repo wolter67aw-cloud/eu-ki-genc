@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @ObservedObject private var music = ChartMusic.shared
+    @ObservedObject private var memory = MemoryStore.shared
     @State private var keyInput = ""
     @State private var bflInput = ""
     @State private var testStatus: String?
@@ -56,6 +57,21 @@ struct SettingsView: View {
                     Picker("Chat", selection: $settings.chatModel) { ForEach(models(AppSettings.defaultChatModels, settings.chatModel), id: \.self) { Text($0) } }
                     Picker("Code", selection: $settings.codeModel) { ForEach(models(AppSettings.defaultCodeModels, settings.codeModel), id: \.self) { Text($0) } }
                     Toggle("Antworten automatisch vorlesen", isOn: $settings.autoSpeak)
+                }
+                .listRowBackground(Theme.card)
+
+                Section {
+                    Toggle("Gedächtnis nutzen", isOn: $settings.memoryEnabled)
+                    if settings.memoryEnabled {
+                        Toggle("Automatisch dazulernen", isOn: $settings.memoryAuto)
+                    }
+                    NavigationLink {
+                        MemoryView()
+                    } label: {
+                        LabeledContent("Gemerktes ansehen", value: memory.facts.isEmpty ? "leer" : "\(memory.facts.count)")
+                    }
+                } header: { Text("Gedächtnis") } footer: {
+                    Text("Die KI kennt in jedem Chat, was sie sich über dich gemerkt hat – z. B. nach „Merk dir, dass …“. Gespeichert nur auf diesem Gerät, bei Anfragen an Mistral mitgeschickt. Keine sensiblen Angaben beim automatischen Lernen.")
                 }
                 .listRowBackground(Theme.card)
 
@@ -177,5 +193,55 @@ struct LogView: View {
             }
         }
         .preferredColorScheme(Theme.current.dark ? .dark : .light)
+    }
+}
+
+/// Gedächtnis ansehen, bearbeiten, ergänzen und löschen.
+struct MemoryView: View {
+    @ObservedObject private var memory = MemoryStore.shared
+    @State private var newFact = ""
+    @State private var editing: MemoryFact?
+    @State private var editText = ""
+    @State private var confirmClear = false
+
+    var body: some View {
+        List {
+            Section {
+                Text("Das weiß die KI über dich. Im Chat kannst du sagen „Merk dir, dass …“.")
+                    .font(.caption).foregroundStyle(Theme.secondaryText)
+            }
+            .listRowBackground(Color.clear)
+            Section {
+                if memory.facts.isEmpty { Text("Noch nichts gemerkt.").foregroundStyle(Theme.secondaryText) }
+                ForEach(memory.facts) { f in
+                    Button { editing = f; editText = f.text } label: { Text(f.text).foregroundStyle(Theme.text) }
+                }
+                .onDelete { idx in idx.map { memory.facts[$0].id }.forEach(memory.delete) }
+            }
+            .listRowBackground(Theme.card)
+            Section("Selbst hinzufügen") {
+                HStack {
+                    TextField("z. B. „Heißt Andy und wohnt in Köln“", text: $newFact)
+                    Button("Merken") { memory.add(newFact); newFact = "" }
+                        .disabled(newFact.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+            }
+            .listRowBackground(Theme.card)
+        }
+        .clearListBackground()
+        .navigationTitle("Gedächtnis")
+        .toolbar {
+            if !memory.facts.isEmpty {
+                ToolbarItem(placement: .destructiveAction) { Button("Alles vergessen", role: .destructive) { confirmClear = true } }
+            }
+        }
+        .alert("Bearbeiten", isPresented: Binding(get: { editing != nil }, set: { if !$0 { editing = nil } })) {
+            TextField("Eintrag", text: $editText)
+            Button("Speichern") { if let e = editing { memory.update(e.id, editText) }; editing = nil }
+            Button("Abbrechen", role: .cancel) { editing = nil }
+        }
+        .confirmationDialog("Alle \(memory.facts.count) Einträge vergessen?", isPresented: $confirmClear, titleVisibility: .visible) {
+            Button("Alles vergessen", role: .destructive) { memory.clear() }
+        }
     }
 }

@@ -17,7 +17,7 @@ import java.util.zip.ZipOutputStream
  */
 object BackupManager {
     private val FOLDERS = listOf("chats", "images", "generated", "results", "ideas")
-    private val FILES = listOf("tasks.json", "projects.json")
+    private val FILES = listOf("tasks.json", "projects.json", "memory.json")
     private const val SETTINGS_ENTRY = "einstellungen.json"
 
     suspend fun export(context: Context, settings: SettingsRepository, target: Uri): Int = withContext(Dispatchers.IO) {

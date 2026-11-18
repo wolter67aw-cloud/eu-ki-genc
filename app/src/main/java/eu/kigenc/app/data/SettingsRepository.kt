@@ -38,6 +38,10 @@ data class AppSettings(
     val startMusic: Boolean = false,
     /** Deezer-Genre für die Start-Musik (0 = alle Charts). */
     val musicGenre: Int = 0,
+    /** Gedächtnis: gemerkte Fakten in jedem Chat mitgeben. */
+    val memoryEnabled: Boolean = true,
+    /** Gedächtnis: aus Nachrichten automatisch dazulernen. */
+    val memoryAuto: Boolean = true,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
@@ -75,6 +79,8 @@ class SettingsRepository(private val context: Context) {
         val BFL_KEY = stringPreferencesKey("bfl_key_enc")
         val START_MUSIC = booleanPreferencesKey("start_music")
         val MUSIC_GENRE = intPreferencesKey("music_genre")
+        val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+        val MEMORY_AUTO = booleanPreferencesKey("memory_auto")
     }
 
     val settings: Flow<AppSettings> = combine(context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey) { p, shared ->
@@ -95,6 +101,8 @@ class SettingsRepository(private val context: Context) {
             bflKey = p[Keys.BFL_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
             startMusic = p[Keys.START_MUSIC] ?: false,
             musicGenre = p[Keys.MUSIC_GENRE] ?: 0,
+            memoryEnabled = p[Keys.MEMORY_ENABLED] ?: true,
+            memoryAuto = p[Keys.MEMORY_AUTO] ?: true,
         )
     }.flowOn(Dispatchers.IO)
 
@@ -119,6 +127,8 @@ class SettingsRepository(private val context: Context) {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)
     }
 
+    suspend fun setMemoryEnabled(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_ENABLED] = v }
+    suspend fun setMemoryAuto(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_AUTO] = v }
     suspend fun setStartMusic(v: Boolean) = context.dataStore.edit { it[Keys.START_MUSIC] = v }
     suspend fun setMusicGenre(id: Int) = context.dataStore.edit { it[Keys.MUSIC_GENRE] = id }
 

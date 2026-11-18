@@ -8,6 +8,8 @@ final class ChatModel: ObservableObject {
     @Published var busy = false
     /// Aktives Projekt für neue bzw. geöffnete Unterhaltung (nil = ohne Projekt).
     @Published var project: Project?
+    /// Kurzer Hinweis (z. B. „Gemerkt: …“).
+    @Published var notice: String?
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -23,7 +25,8 @@ final class ChatModel: ObservableObject {
         conversation.messages.append(ChatMessage(role: "user", text: shown + (extra.isEmpty ? "" : "\n\n📎 " + attachments.map(\.name).joined(separator: ", ")), images: images))
         if conversation.messages.count == 1 { conversation.title = String(shown.prefix(50)) }
         let projectText = ProjectStore.shared.byID(conversation.projectID)?.systemText() ?? ""
-        var apiMessages = [ApiMessage(role: "system", text: Self.system + projectText)]
+        let memoryText = settings.memoryEnabled ? MemoryStore.shared.systemText : ""
+        var apiMessages = [ApiMessage(role: "system", text: Self.system + memoryText + projectText)]
         let history = conversation.messages.dropLast().suffix(20)
         for m in history where !m.isError { apiMessages.append(ApiMessage(role: m.role, text: m.text, images: m.role == "user" ? m.images : [])) }
         apiMessages.append(ApiMessage(role: "user", text: shown + extra, images: images))
@@ -40,6 +43,7 @@ final class ChatModel: ObservableObject {
                 }
                 if conversation.messages[index].text.isEmpty { conversation.messages[index].text = "(keine Antwort)" }
                 if settings.autoSpeak { Speaker.shared.speak(conversation.messages[index].text) }
+                if settings.memoryEnabled { learn(text, key: settings.key, auto: settings.memoryAuto) }
             } catch {
                 ErrorLog.report(error, context: "Chat")
                 conversation.messages[index].text = "⚠️ " + friendly(error)
@@ -54,6 +58,17 @@ final class ChatModel: ObservableObject {
     func stop() {
         task?.cancel()
         busy = false
+    }
+
+    /// Gedächtnis pflegen: „Merk dir …“ immer, sonst (falls eingeschaltet) automatisch dazulernen.
+    private func learn(_ text: String, key: String, auto: Bool) {
+        let explicit = MemoryStore.explicitFact(text)
+        guard explicit != nil || auto else { return }
+        Task {
+            let added = await MemoryStore.shared.learn(from: text, explicit: explicit, key: key)
+            if added == 1, let last = MemoryStore.shared.facts.last { notice = "Gemerkt: \(last.text)" }
+            else if added > 1 { notice = "\(added) Dinge gemerkt (Optionen → Gedächtnis)" }
+        }
     }
 
     /// Ist die geöffnete Unterhaltung im Verlauf angeheftet? (Maßgeblich ist der gespeicherte Stand.)
@@ -123,6 +138,17 @@ struct ChatView: View {
                     emptyState
                 } else {
                     messages
+                }
+                if let n = model.notice {
+                    Label(n, systemImage: "brain").font(.caption).foregroundStyle(Theme.cyan)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Theme.card, in: Capsule())
+                        .padding(.bottom, 4)
+                        .accessibilityAddTraits(.updatesFrequently)
+                        .task(id: n) {
+                            try? await Task.sleep(nanoseconds: 3_500_000_000)
+                            if model.notice == n { model.notice = nil }
+                        }
                 }
                 inputBar
             }

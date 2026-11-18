@@ -23,6 +23,10 @@ class KiApp : Application() {
         private set
     /** Projekte (Anweisungen + Wissen) für den Chat. */
     val projects: eu.kigenc.app.data.ProjectStore by lazy { eu.kigenc.app.data.ProjectStore(this) }
+    /** Gedächtnis: Fakten über den Nutzer für alle Chats. */
+    val memory: eu.kigenc.app.data.MemoryStore by lazy { eu.kigenc.app.data.MemoryStore(this) }
+    /** Hintergrund für das Dazulernen (läuft weiter, auch wenn der Chat geschlossen wird). */
+    val memoryScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
     val mistral = MistralClient()
     val tts: TtsController by lazy { TtsController(this) }
     /** Musik beim Start: Nr. 1 der Charts als Hörprobe. */

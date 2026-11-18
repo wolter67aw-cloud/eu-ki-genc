@@ -35,6 +35,8 @@ data class ChatUiState(
     /** Aktives Projekt für neue bzw. geöffnete Unterhaltung (null = kein Projekt). */
     val project: eu.kigenc.app.data.Project? = null,
     val error: String? = null,
+    /** Kurzer Hinweis (z. B. „Gemerkt“). */
+    val notice: String? = null,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
@@ -95,6 +97,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
     }
 
     fun clearError() = _state.update { it.copy(error = null) }
+    fun clearNotice() = _state.update { it.copy(notice = null) }
 
     fun reportError(message: String) = _state.update { it.copy(error = message) }
 
@@ -227,7 +230,10 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 app.mistral.streamChat(
                     apiKey = settings.apiKey,
                     model = model,
-                    messages = buildApiMessages(history, app.projects.byId(base.projectId)),
+                    messages = buildApiMessages(
+                        history, app.projects.byId(base.projectId),
+                        memory = if (settings.memoryEnabled) app.memory.systemText() else "",
+                    ),
                     temperature = if (mode == ChatMode.CODE) 0.2 else 0.7,
                 ).collect { delta ->
                     answer.append(delta)
@@ -277,12 +283,13 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     if (failed == null && settings.autoSpeak && mode == ChatMode.CHAT) {
                         app.tts.speak(assistant.id, finalText)
                     }
+                    if (failed == null && settings.memoryEnabled && mode == ChatMode.CHAT) learn(settings.apiKey, userMessage.text, settings.memoryAuto)
                 }
             }
         }
     }
 
-    private fun buildApiMessages(history: List<ChatMessage>, project: eu.kigenc.app.data.Project? = null): List<ApiMessage> {
+    private fun buildApiMessages(history: List<ChatMessage>, project: eu.kigenc.app.data.Project? = null, memory: String = ""): List<ApiMessage> {
         val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMAN))
         val system = when (mode) {
             ChatMode.CHAT ->
@@ -307,7 +314,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             left -= n
         }
         return buildList {
-            add(ApiMessage("system", system + (project?.systemText() ?: "")))
+            add(ApiMessage("system", system + memory + (project?.systemText() ?: "")))
             recent.forEach { m ->
                 if (m.role == Role.ASSISTANT && m.text.isBlank()) return@forEach
                 val urls = m.allImages.take(imageCount[m.id] ?: 0).mapNotNull(ImageUtils::toDataUrl)
@@ -319,6 +326,19 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                         extraImages = urls,
                     )
                 )
+            }
+        }
+    }
+
+    /** Gedächtnis pflegen: „Merk dir …“ immer, sonst (falls eingeschaltet) automatisch dazulernen. */
+    private fun learn(apiKey: String, text: String, auto: Boolean) {
+        val explicit = app.memory.explicitFact(text)
+        if (explicit == null && !auto) return
+        app.memoryScope.launch {
+            val added = app.memory.learnFrom(app.mistral, apiKey, text, explicit)
+            if (added > 0) {
+                val last = app.memory.facts.value.lastOrNull()?.text.orEmpty()
+                _state.update { it.copy(notice = if (added == 1) "Gemerkt: $last" else "$added Dinge gemerkt (Optionen → Gedächtnis)") }
             }
         }
     }

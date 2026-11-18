@@ -68,6 +68,10 @@ final class AppSettings: ObservableObject {
     @Published var startMusic: Bool { didSet { d.set(startMusic, forKey: "start_music") } }
     /// Deezer-Genre für die Start-Musik (0 = alle Charts).
     @Published var musicGenre: Int { didSet { d.set(musicGenre, forKey: "music_genre") } }
+    /// Gedächtnis: gemerkte Fakten in jedem Chat mitgeben.
+    @Published var memoryEnabled: Bool { didSet { d.set(memoryEnabled, forKey: "memory_enabled") } }
+    /// Gedächtnis: aus Nachrichten automatisch dazulernen.
+    @Published var memoryAuto: Bool { didSet { d.set(memoryAuto, forKey: "memory_auto") } }
 
     var hasKey: Bool { !key.isEmpty }
     /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
@@ -91,6 +95,8 @@ final class AppSettings: ObservableObject {
         design = d.string(forKey: "design") ?? "original"
         startMusic = d.bool(forKey: "start_music")
         musicGenre = d.integer(forKey: "music_genre")
+        memoryEnabled = d.object(forKey: "memory_enabled") as? Bool ?? true
+        memoryAuto = d.object(forKey: "memory_auto") as? Bool ?? true
     }
 
     static let defaultChatModels = ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "magistral-medium-latest", "ministral-8b-latest"]
