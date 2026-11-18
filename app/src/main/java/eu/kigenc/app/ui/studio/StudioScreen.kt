@@ -2,6 +2,9 @@
 
 package eu.kigenc.app.ui.studio
 
+import eu.kigenc.app.ui.components.SpeechInputButton
+import eu.kigenc.app.ui.components.SpeechLanguageChip
+import eu.kigenc.app.ui.components.appendSpoken
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -178,6 +181,7 @@ private fun TextStudio(
     var reportText by remember { mutableStateOf<String?>(null) }
     reportText?.let { ReportDialog(contentExcerpt = it, kind = "Text", onDismiss = { reportText = null }) }
     var targetLanguage by rememberSaveable { mutableStateOf("Englische") }
+    var speechLang by rememberSaveable { mutableStateOf("de-DE") }
 
     LazyColumn(
         contentPadding = PaddingValues(
@@ -203,6 +207,7 @@ private fun TextStudio(
             }
         }
         item {
+          Column {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
@@ -210,10 +215,23 @@ private fun TextStudio(
                 minLines = 4,
                 maxLines = 12,
                 shape = RoundedCornerShape(16.dp),
+                trailingIcon = {
+                    val translating = state.template.id == "translate"
+                    SpeechInputButton(
+                        prompt = if (translating) "Sprich den Text, der übersetzt werden soll …" else "Sprich jetzt …",
+                        languageTag = if (translating) speechLang else null,
+                        onText = { input = appendSpoken(input, it) },
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
             )
+            // Beim Übersetzen: Sprache wählen, in der ins Mikrofon gesprochen wird
+            if (state.template.id == "translate") {
+                SpeechLanguageChip(speechLang, { speechLang = it }, Modifier.padding(horizontal = 16.dp))
+            }
+          }
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {

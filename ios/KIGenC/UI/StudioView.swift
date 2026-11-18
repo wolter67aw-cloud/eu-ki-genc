@@ -54,6 +54,8 @@ struct TextStudio: View {
     @State private var template = Templates.all[0]
     @State private var tone = "Neutral"
     @State private var language = "Englisch"
+    @StateObject private var dictation = Dictation()
+    @State private var speechLang = "de-DE"
     @State private var input = ""
     @State private var attachments: [Attachment] = []
     @State private var result = ""
@@ -86,10 +88,25 @@ struct TextStudio: View {
                     Spacer()
                 }
                 .tint(Theme.cyan)
-                TextField(template.hint, text: $input, axis: .vertical)
-                    .lineLimit(4...12)
-                    .padding(12)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
+                HStack(alignment: .bottom) {
+                    TextField(template.hint, text: $input, axis: .vertical)
+                        .lineLimit(4...12)
+                    Button {
+                        dictation.toggle(locale: template.id == "translate" ? speechLang : "de-DE") { t in
+                            input = input.isEmpty ? t : input + " " + t
+                        }
+                    } label: {
+                        Image(systemName: dictation.listening ? "mic.fill" : "mic").font(.title3)
+                            .foregroundStyle(dictation.listening ? .red : Theme.cyan)
+                    }
+                    .accessibilityLabel(dictation.listening ? "Spracheingabe beenden" : "Spracheingabe (Mikrofon)")
+                }
+                .padding(12)
+                .background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
+                if dictation.listening { Text(dictation.transcript.isEmpty ? "Ich höre zu …" : dictation.transcript).font(.callout).foregroundStyle(Theme.cyan) }
+                if let e = dictation.error { Text(e).font(.caption).foregroundStyle(.orange) }
+                // Beim Übersetzen: Sprache wählen, in der ins Mikrofon gesprochen wird
+                if template.id == "translate" { SpeechLanguageMenu(selection: $speechLang) }
                 AttachmentBar(attachments: $attachments)
                 GradientButton(title: busy ? "Wird erstellt …" : "Erstellen", icon: "sparkles", busy: busy) { generate() }
                     .disabled(!settings.hasKey || (input.trimmingCharacters(in: .whitespaces).isEmpty && attachments.isEmpty))

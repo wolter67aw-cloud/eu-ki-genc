@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import eu.kigenc.app.R
 import eu.kigenc.app.ui.components.MarkdownText
+import eu.kigenc.app.ui.components.SpeechInputButton
+import eu.kigenc.app.ui.components.SpeechLanguageChip
+import eu.kigenc.app.ui.components.appendSpoken
 import eu.kigenc.app.ui.components.shareImage
 import eu.kigenc.app.ui.tools.FileImage
 import eu.kigenc.app.ui.tools.ResultCard
@@ -259,6 +262,7 @@ private fun StartDefine(vm: StartViewModel, cat: StartCategory, inner: PaddingVa
     val image by vm.image.collectAsStateWithLifecycle()
     val sources by vm.sources.collectAsStateWithLifecycle()
     var showPrompt by rememberSaveable { mutableStateOf(false) }
+    var speechLang by rememberSaveable { mutableStateOf("de-DE") }
 
     LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxSize()) {
         if (note.isNotBlank()) {
@@ -283,10 +287,22 @@ private fun StartDefine(vm: StartViewModel, cat: StartCategory, inner: PaddingVa
             }
         }
         item {
-            OutlinedTextField(
-                content, vm::setContent, label = { Text(cat.contentLabel) }, placeholder = { Text(cat.contentHint) },
-                minLines = 3, maxLines = 12, modifier = Modifier.fillMaxWidth()
-            )
+            val translating = cat.id == "translate"
+            Column {
+                OutlinedTextField(
+                    content, vm::setContent, label = { Text(cat.contentLabel) }, placeholder = { Text(cat.contentHint) },
+                    minLines = 3, maxLines = 12, modifier = Modifier.fillMaxWidth(),
+                    trailingIcon = {
+                        SpeechInputButton(
+                            prompt = if (translating) "Sprich den Text, der übersetzt werden soll …" else "Sprich jetzt …",
+                            languageTag = if (translating) speechLang else null,
+                            onText = { vm.setContent(appendSpoken(content, it)) },
+                        )
+                    }
+                )
+                // Beim Übersetzen: Sprache wählen, in der ins Mikrofon gesprochen wird
+                if (translating) SpeechLanguageChip(speechLang, { speechLang = it })
+            }
         }
         cat.groups.forEach { g ->
             item(key = "g_${cat.id}_${g.key}") {

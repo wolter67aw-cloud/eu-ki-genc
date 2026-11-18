@@ -44,13 +44,27 @@ final class Dictation: ObservableObject {
     @Published var transcript = ""
     @Published var error: String?
 
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
+    private var recognizer = SFSpeechRecognizer(locale: Locale(identifier: "de-DE"))
+
+    /// Sprachen, in denen man ins Mikrofon sprechen kann (Name, Locale).
+    static let languages: [(name: String, id: String)] = [
+        ("Deutsch", "de-DE"), ("Englisch", "en-US"), ("Französisch", "fr-FR"), ("Spanisch", "es-ES"),
+        ("Italienisch", "it-IT"), ("Niederländisch", "nl-NL"), ("Polnisch", "pl-PL"), ("Portugiesisch", "pt-PT"),
+        ("Türkisch", "tr-TR"), ("Ukrainisch", "uk-UA"), ("Russisch", "ru-RU"), ("Griechisch", "el-GR"),
+        ("Tschechisch", "cs-CZ"), ("Arabisch", "ar-SA"),
+    ]
+
+    static func languageName(_ id: String) -> String { languages.first { $0.id == id }?.name ?? id }
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
 
-    func toggle(onResult: @escaping (String) -> Void) {
+    /// Diktat starten bzw. beenden. [locale] = Sprache, in der gesprochen wird (Standard Deutsch).
+    func toggle(locale: String = "de-DE", onResult: @escaping (String) -> Void) {
         if listening { stop(); return }
+        if recognizer?.locale.identifier != locale {
+            recognizer = SFSpeechRecognizer(locale: Locale(identifier: locale))
+        }
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 guard status == .authorized else { self.error = "Spracherkennung nicht erlaubt (Einstellungen › KI-GenC)."; return }

@@ -349,6 +349,7 @@ struct StartView: View {
     @EnvironmentObject private var settings: AppSettings
     @StateObject private var model = StartModel()
     @StateObject private var dictation = Dictation()
+    @State private var speechLang = "de-DE"
     @State private var showPrompt = false
     @State private var renaming: RecentStart?
     @State private var renameText = ""
@@ -510,6 +511,13 @@ struct StartView: View {
         .background(Theme.backgroundGradient.ignoresSafeArea())
     }
 
+    private func micButton(locale: String, onResult: @escaping (String) -> Void) -> some View {
+        Button { dictation.toggle(locale: locale, onResult: onResult) } label: {
+            Image(systemName: dictation.listening ? "mic.fill" : "mic").font(.title3).foregroundStyle(dictation.listening ? .red : Theme.cyan)
+        }
+        .accessibilityLabel(dictation.listening ? "Spracheingabe beenden" : "Spracheingabe (Mikrofon)")
+    }
+
     private func define(_ c: StartCategory) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             if !model.note.isEmpty {
@@ -528,12 +536,22 @@ struct StartView: View {
                     }
                 }
             }
-            TextField(c.contentHint, text: Binding(get: { model.content }, set: { model.content = $0; model.customPrompt = nil }), axis: .vertical)
-                .lineLimit(3...12)
-                .padding(12).background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(alignment: .topLeading) {
-                    Text(c.contentLabel).font(.caption2).foregroundStyle(Theme.cyan).padding(.horizontal, 6).offset(x: 8, y: -8)
+            HStack(alignment: .bottom) {
+                TextField(c.contentHint, text: Binding(get: { model.content }, set: { model.content = $0; model.customPrompt = nil }), axis: .vertical)
+                    .lineLimit(3...12)
+                micButton(locale: c.id == "translate" ? speechLang : "de-DE") { t in
+                    model.content = model.content.isEmpty ? t : model.content + " " + t
+                    model.customPrompt = nil
                 }
+            }
+            .padding(12).background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(alignment: .topLeading) {
+                Text(c.contentLabel).font(.caption2).foregroundStyle(Theme.cyan).padding(.horizontal, 6).offset(x: 8, y: -8)
+            }
+            if dictation.listening { Text(dictation.transcript.isEmpty ? "Ich höre zu …" : dictation.transcript).font(.callout).foregroundStyle(Theme.cyan) }
+            if let e = dictation.error { Text(e).font(.caption).foregroundStyle(.orange) }
+            // Beim Übersetzen: Sprache wählen, in der ins Mikrofon gesprochen wird
+            if c.id == "translate" { SpeechLanguageMenu(selection: $speechLang) }
             ForEach(c.groups, id: \.key) { g in
                 VStack(alignment: .leading, spacing: 6) {
                     Text(g.label).font(.subheadline.bold())
@@ -627,5 +645,25 @@ struct FlowChips: View {
                 }
             }
         }
+    }
+}
+
+/// Auswahl der Sprache, in der ins Mikrofon gesprochen wird (z. B. beim Übersetzen).
+struct SpeechLanguageMenu: View {
+    @Binding var selection: String
+
+    var body: some View {
+        Menu {
+            Picker("Mikrofon-Sprache", selection: $selection) {
+                ForEach(Dictation.languages, id: \.id) { Text($0.name).tag($0.id) }
+            }
+        } label: {
+            Label("Mikrofon spricht: \(Dictation.languageName(selection))", systemImage: "mic")
+                .font(.callout)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(Theme.card, in: Capsule())
+                .foregroundStyle(Theme.text)
+        }
+        .accessibilityLabel("Sprache fürs Mikrofon: \(Dictation.languageName(selection))")
     }
 }
