@@ -150,7 +150,9 @@ enum DocExport {
             case .rule: body += "<w:p><w:pPr><w:pBdr><w:bottom w:val=\"single\" w:sz=\"6\" w:space=\"1\" w:color=\"999999\"/></w:pBdr></w:pPr></w:p>"
             case .table(let rows):
                 let bd = ["top", "left", "bottom", "right", "insideH", "insideV"].map { "<w:\($0) w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/>" }.joined()
+                let cols = max(rows.map(\.count).max() ?? 1, 1)
                 body += "<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders>\(bd)</w:tblBorders></w:tblPr>"
+                body += "<w:tblGrid>" + String(repeating: "<w:gridCol w:w=\"\(9638 / cols)\"/>", count: cols) + "</w:tblGrid>"
                 for (ri, row) in rows.enumerated() {
                     body += "<w:tr>" + row.map { "<w:tc><w:tcPr><w:tcW w:w=\"0\" w:type=\"auto\"/></w:tcPr>\(wPara(wRuns($0, bold: ri == 0), after: 40))</w:tc>" }.joined() + "</w:tr>"
                 }

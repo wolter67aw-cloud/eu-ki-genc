@@ -159,7 +159,9 @@ object DocExport {
                         val border = "<w:top w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/><w:left w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/>" +
                             "<w:bottom w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/><w:right w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/>" +
                             "<w:insideH w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/><w:insideV w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/>"
+                        val cols = b.rows.maxOf { it.size }.coerceAtLeast(1)
                         "<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders>$border</w:tblBorders></w:tblPr>" +
+                            "<w:tblGrid>" + "<w:gridCol w:w=\"${9638 / cols}\"/>".repeat(cols) + "</w:tblGrid>" +
                             b.rows.mapIndexed { ri, row ->
                                 "<w:tr>" + row.joinToString("") { c -> "<w:tc><w:tcPr><w:tcW w:w=\"0\" w:type=\"auto\"/></w:tcPr>${wPara(wRuns(c, forceBold = ri == 0), 40)}</w:tc>" } + "</w:tr>"
                             }.joinToString("") + "</w:tbl>" + wPara("", 60)
