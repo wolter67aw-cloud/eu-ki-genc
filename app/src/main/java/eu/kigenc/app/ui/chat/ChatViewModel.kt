@@ -32,6 +32,8 @@ data class ChatUiState(
     val streaming: Boolean = false,
     /** Für die nächste Nachricht ausgewählte Bilder (mehrere möglich). */
     val attachedImages: List<String> = emptyList(),
+    /** Aktives Projekt für neue bzw. geöffnete Unterhaltung (null = kein Projekt). */
+    val project: eu.kigenc.app.data.Project? = null,
     val error: String? = null,
 )
 
@@ -70,7 +72,18 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun open(conversation: Conversation) {
         stop()
-        _state.update { it.copy(current = conversation, error = null) }
+        _state.update { it.copy(current = conversation, error = null, project = app.projects.byId(conversation.projectId)) }
+    }
+
+    /** Projekt für die nächste neue Unterhaltung wählen (null = ohne Projekt). Eine laufende wird neu begonnen. */
+    fun selectProject(project: eu.kigenc.app.data.Project?) {
+        if (_state.value.current?.messages?.isNotEmpty() == true) newChat()
+        _state.update { it.copy(project = project) }
+    }
+
+    /** Nach dem Bearbeiten/Löschen eines Projekts die Anzeige aktualisieren. */
+    fun refreshProject() {
+        _state.update { st -> st.copy(project = st.project?.let { app.projects.byId(it.id) }) }
     }
 
     fun delete(conversation: Conversation) {
@@ -197,6 +210,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 title = makeTitle(userMessage.text),
                 mode = mode,
                 model = model,
+                projectId = _state.value.project?.id,
             )
             val history = base.messages + userMessage
             var conversation = base.copy(
@@ -213,7 +227,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 app.mistral.streamChat(
                     apiKey = settings.apiKey,
                     model = model,
-                    messages = buildApiMessages(history),
+                    messages = buildApiMessages(history, app.projects.byId(base.projectId)),
                     temperature = if (mode == ChatMode.CODE) 0.2 else 0.7,
                 ).collect { delta ->
                     answer.append(delta)
@@ -268,7 +282,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         }
     }
 
-    private fun buildApiMessages(history: List<ChatMessage>): List<ApiMessage> {
+    private fun buildApiMessages(history: List<ChatMessage>, project: eu.kigenc.app.data.Project? = null): List<ApiMessage> {
         val today = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d. MMMM yyyy", Locale.GERMAN))
         val system = when (mode) {
             ChatMode.CHAT ->
@@ -293,7 +307,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             left -= n
         }
         return buildList {
-            add(ApiMessage("system", system))
+            add(ApiMessage("system", system + (project?.systemText() ?: "")))
             recent.forEach { m ->
                 if (m.role == Role.ASSISTANT && m.text.isBlank()) return@forEach
                 val urls = m.allImages.take(imageCount[m.id] ?: 0).mapNotNull(ImageUtils::toDataUrl)

@@ -52,6 +52,8 @@ data class Conversation(
     val updatedAt: Long = System.currentTimeMillis(),
     /** Im Verlauf angeheftet (oben in der Gruppe „Angeheftet“). Optionales Feld, ältere Dateien = false. */
     val pinned: Boolean = false,
+    /** Zugehöriges Projekt (optional; ältere Dateien = kein Projekt). */
+    val projectId: String? = null,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -60,6 +62,7 @@ data class Conversation(
         .put("model", model)
         .put("updatedAt", updatedAt)
         .put("pinned", pinned)
+        .apply { if (projectId != null) put("projectId", projectId) }
         .put("messages", JSONArray().apply { messages.forEach { put(it.toJson()) } })
 
     companion object {
@@ -72,6 +75,7 @@ data class Conversation(
                 model = o.optString("model", ""),
                 updatedAt = o.optLong("updatedAt", 0L),
                 pinned = o.optBoolean("pinned", false),
+                projectId = if (o.isNull("projectId")) null else o.optString("projectId").ifBlank { null },
                 messages = List(arr.length()) { ChatMessage.fromJson(arr.getJSONObject(it)) },
             )
         }

@@ -6,6 +6,8 @@ final class ChatModel: ObservableObject {
     @Published var input = ""
     @Published var attachments: [Attachment] = []
     @Published var busy = false
+    /// Aktives Projekt für neue bzw. geöffnete Unterhaltung (nil = ohne Projekt).
+    @Published var project: Project?
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -20,7 +22,8 @@ final class ChatModel: ObservableObject {
         let shown = text.isEmpty ? "Bitte analysiere den Anhang." : text
         conversation.messages.append(ChatMessage(role: "user", text: shown + (extra.isEmpty ? "" : "\n\n📎 " + attachments.map(\.name).joined(separator: ", ")), images: images))
         if conversation.messages.count == 1 { conversation.title = String(shown.prefix(50)) }
-        var apiMessages = [ApiMessage(role: "system", text: Self.system)]
+        let projectText = ProjectStore.shared.byID(conversation.projectID)?.systemText() ?? ""
+        var apiMessages = [ApiMessage(role: "system", text: Self.system + projectText)]
         let history = conversation.messages.dropLast().suffix(20)
         for m in history where !m.isError { apiMessages.append(ApiMessage(role: m.role, text: m.text, images: m.role == "user" ? m.images : [])) }
         apiMessages.append(ApiMessage(role: "user", text: shown + extra, images: images))
@@ -72,10 +75,25 @@ final class ChatModel: ObservableObject {
         }
     }
 
+    /// Gespeicherte Unterhaltung öffnen (inkl. ihres Projekts).
+    func open(_ c: Conversation) {
+        stop()
+        conversation = c
+        project = ProjectStore.shared.byID(c.projectID)
+    }
+
+    /// Projekt für die nächste neue Unterhaltung wählen; eine laufende wird gespeichert und neu begonnen.
+    func selectProject(_ p: Project?) {
+        if !conversation.messages.isEmpty { newChat() }
+        project = p
+        conversation.projectID = p?.id
+    }
+
     func newChat() {
         stop()
         if !conversation.messages.isEmpty { ConversationStore.shared.upsert(conversation) }
         conversation = Conversation(title: "Neuer Chat", messages: [])
+        conversation.projectID = project?.id
         input = ""
         attachments = []
     }
@@ -87,6 +105,8 @@ struct ChatView: View {
     @StateObject private var dictation = Dictation()
     @ObservedObject private var store = ConversationStore.shared
     @State private var showHistory = false
+    @State private var showProjects = false
+    @ObservedObject private var projects = ProjectStore.shared
     @State private var historyQuery = ""
     /// Sprung aus der Verlaufssuche: Ziel-Nachricht und kurz hervorgehobene Nachricht.
     @State private var jumpTo: UUID?
@@ -107,7 +127,7 @@ struct ChatView: View {
                 inputBar
             }
             .background(Theme.backgroundGradient.ignoresSafeArea())
-            .navigationTitle(model.conversation.messages.isEmpty ? "KI-GenC" : model.conversation.title)
+            .navigationTitle(model.conversation.messages.isEmpty ? (model.project?.name ?? "KI-GenC") : model.conversation.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -131,6 +151,14 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showHistory) { history }
+            .sheet(isPresented: $showProjects) {
+                ProjectsView { p in model.selectProject(p); showProjects = false }
+                    .environmentObject(settings)
+            }
+            .onChange(of: projects.projects) { _, list in
+                // Bearbeitetes/gelöschtes Projekt übernehmen
+                if let id = model.project?.id { model.project = list.first { $0.id == id } }
+            }
         }
     }
 
@@ -144,6 +172,23 @@ struct ChatView: View {
             VStack(spacing: 16) {
                 Image(Theme.current.symbol ?? "Logo").resizable().scaledToFit().frame(width: 96, height: 96).clipShape(RoundedRectangle(cornerRadius: 22)).padding(.top, 30)
                 Text("Wie kann ich helfen?").font(.title2.bold())
+                // Projekt wählen (Anweisungen + Wissen für den neuen Chat)
+                Menu {
+                    Button { model.selectProject(nil) } label: {
+                        if model.project == nil { Label("Ohne Projekt", systemImage: "checkmark") } else { Text("Ohne Projekt") }
+                    }
+                    ForEach(projects.projects) { p in
+                        Button { model.selectProject(p) } label: { Label(p.name, systemImage: model.project?.id == p.id ? "checkmark" : "folder") }
+                    }
+                    Divider()
+                    Button { showProjects = true } label: { Label(projects.projects.isEmpty ? "Projekt anlegen …" : "Projekte verwalten …", systemImage: "pencil") }
+                } label: {
+                    Label(model.project.map { "Projekt: \($0.name)" } ?? "Ohne Projekt", systemImage: "folder")
+                        .font(.callout).lineLimit(1)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Theme.card, in: Capsule())
+                }
+                .accessibilityLabel("Projekt wählen, aktuell: \(model.project?.name ?? "ohne Projekt")")
                 // Schnellwahl: angeheftete Unterhaltungen direkt fortsetzen (zuletzt genutzt zuerst)
                 let pinned = store.conversations.filter { $0.pinned && !$0.messages.isEmpty }
                 if !pinned.isEmpty {
@@ -153,8 +198,7 @@ struct ChatView: View {
                             .accessibilityAddTraits(.isHeader)
                         ForEach(pinned.prefix(6)) { c in
                             Button {
-                                model.stop()
-                                model.conversation = c
+                                model.open(c)
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "bubble.left.and.bubble.right").foregroundStyle(Theme.cyan)
@@ -291,7 +335,7 @@ struct ChatView: View {
                                 model.stop()
                                 // Bei aktiver Suche direkt zur ersten Fundstelle springen
                                 jumpTo = q.isEmpty ? nil : c.messages.first(where: { $0.text.localizedCaseInsensitiveContains(q) })?.id
-                                model.conversation = c
+                                model.open(c)
                                 showHistory = false
                             } label: {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -302,7 +346,8 @@ struct ChatView: View {
                                         }
                                         Text(c.title).lineLimit(1).foregroundStyle(Theme.text)
                                     }
-                                    Text(c.updated.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(Theme.secondaryText)
+                                    Text((projects.byID(c.projectID).map { "Projekt „\($0.name)“ · " } ?? "") + c.updated.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.caption).foregroundStyle(Theme.secondaryText)
                                     if let hit = Self.snippet(in: c, query: q) {
                                         Text(hit).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
                                     }

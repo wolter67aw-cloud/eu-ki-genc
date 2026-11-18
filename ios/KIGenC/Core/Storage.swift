@@ -42,8 +42,10 @@ struct Conversation: Identifiable, Codable {
     var messages: [ChatMessage]
     /// Im Verlauf angeheftet (Gruppe „Angeheftet“ ganz oben). Fehlt in älteren Daten → false.
     var pinned = false
+    /// Zugehöriges Projekt (fehlt in älteren Daten → kein Projekt).
+    var projectID: UUID? = nil
 
-    enum CodingKeys: String, CodingKey { case id, title, updated, messages, pinned }
+    enum CodingKeys: String, CodingKey { case id, title, updated, messages, pinned, projectID }
 }
 
 extension Conversation {
@@ -55,6 +57,68 @@ extension Conversation {
         updated = try c.decodeIfPresent(Date.self, forKey: .updated) ?? Date()
         messages = try c.decodeIfPresent([ChatMessage].self, forKey: .messages) ?? []
         pinned = try c.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
+        projectID = try c.decodeIfPresent(UUID.self, forKey: .projectID)
+    }
+}
+
+/// Wissens-Eintrag eines Projekts (Text aus Datei oder eigene Notiz).
+struct ProjectFile: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var text: String
+}
+
+/// Projekt wie bei Claude: feste Anweisungen und Wissen, das jeder Chat des Projekts kennt.
+struct Project: Codable, Identifiable, Equatable {
+    var id = UUID()
+    var name: String
+    var instructions = ""
+    var files: [ProjectFile] = []
+    var updated = Date()
+
+    /// So viel Projektwissen (Zeichen) geht höchstens pro Anfrage an die KI.
+    static let maxContext = 60_000
+
+    /// Systemtext für die KI: Anweisungen + Wissen (gekürzt).
+    func systemText() -> String {
+        var s = "\n\nDiese Unterhaltung gehört zum Projekt „\(name)“."
+        let instr = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !instr.isEmpty { s += "\nAnweisungen des Nutzers für dieses Projekt (immer befolgen):\n" + instr }
+        if !files.isEmpty {
+            s += "\n\nProjektwissen (nutze es, wenn es zur Frage passt, und nenne die Quelle):"
+            var left = Self.maxContext
+            for f in files {
+                if left <= 0 { s += "\n\n[Weiteres Projektwissen wegen der Länge ausgelassen]"; break }
+                let t = String(f.text.prefix(left))
+                s += "\n\n--- \(f.name) ---\n" + t
+                if t.count < f.text.count { s += "\n[gekürzt]" }
+                left -= t.count
+            }
+        }
+        return s
+    }
+}
+
+final class ProjectStore: ObservableObject {
+    static let shared = ProjectStore()
+    @Published var projects: [Project] = (Store.load([Project].self, "projects.json") ?? []).sorted { $0.updated > $1.updated }
+
+    func byID(_ id: UUID?) -> Project? {
+        guard let id else { return nil }
+        return projects.first { $0.id == id }
+    }
+
+    func save(_ project: Project) {
+        var p = project
+        p.updated = Date()
+        projects.removeAll { $0.id == p.id }
+        projects.insert(p, at: 0)
+        Store.save(projects, "projects.json")
+    }
+
+    func delete(_ id: UUID) {
+        projects.removeAll { $0.id == id }
+        Store.save(projects, "projects.json")
     }
 }
 

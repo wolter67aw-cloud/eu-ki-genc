@@ -163,6 +163,8 @@ fun ChatScreen(
     var jumpTo by remember { mutableStateOf<String?>(null) }
     var flashId by remember { mutableStateOf<String?>(null) }
     var reporting by remember { mutableStateOf<String?>(null) }
+    var showProjects by remember { mutableStateOf(false) }
+    val projects by app.projects.projects.collectAsStateWithLifecycle()
     val isCode = vm.mode == ChatMode.CODE
     val pinScope = rememberCoroutineScope()
 
@@ -268,7 +270,9 @@ fun ChatScreen(
                         val model = settings?.let { if (isCode) it.codeModel else it.chatModel }
                         if (model != null) {
                             Text(
-                                model,
+                                state.project?.let { "${it.name} · $model" } ?: model,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -336,6 +340,15 @@ fun ChatScreen(
                 onSuggestion = { input = it },
                 pinned = state.conversations.filter { it.pinned && it.messages.isNotEmpty() },
                 onOpenPinned = { vm.open(it); input = "" },
+                projectChooser = if (isCode) null else {
+                    {
+                        ProjectChooser(
+                            current = state.project,
+                            onSelect = vm::selectProject,
+                            onManage = { showProjects = true },
+                        )
+                    }
+                },
                 modifier = Modifier
                     .padding(padding)
                     .fillMaxSize()
@@ -382,13 +395,22 @@ fun ChatScreen(
         }
     }
 
+    if (showProjects) {
+        ProjectsSheet(
+            onDismiss = { showProjects = false },
+            onChanged = vm::refreshProject,
+            onUse = { p -> vm.selectProject(p); input = ""; showProjects = false },
+        )
+    }
+
     if (showHistory) {
         ModalBottomSheet(onDismissRequest = { showHistory = false }) {
-            Text(
-                "Verlauf",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-            )
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Verlauf", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                if (!isCode) {
+                    TextButton(onClick = { showHistory = false; showProjects = true }) { Text("Projekte") }
+                }
+            }
             OutlinedTextField(
                 value = historyQuery, onValueChange = { historyQuery = it },
                 placeholder = { Text("Verlauf durchsuchen …") },
@@ -448,8 +470,10 @@ fun ChatScreen(
                             headlineContent = { Text(conv.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             supportingContent = {
                                 Column {
+                                    val projectName = conv.projectId?.let { id -> projects.firstOrNull { it.id == id }?.name }
                                     Text(
-                                        DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
+                                        (projectName?.let { "Projekt „$it“ · " } ?: "") +
+                                            DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(conv.updatedAt)) +
                                             " · " + conv.model
                                     )
                                     val hit = remember(conv, historyQuery) { historySnippet(conv, historyQuery.trim(), highlight) }
@@ -540,6 +564,7 @@ private fun EmptyState(
     pinned: List<Conversation>,
     onOpenPinned: (Conversation) -> Unit,
     modifier: Modifier,
+    projectChooser: (@Composable () -> Unit)? = null,
 ) {
     val suggestions = if (isCode) listOf(
         "Schreibe eine Kotlin-Funktion, die E-Mail-Adressen validiert",
@@ -585,6 +610,10 @@ private fun EmptyState(
             style = MaterialTheme.typography.bodyMedium,
             color = if (hasKey) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
         )
+        projectChooser?.let {
+            Spacer(Modifier.height(12.dp))
+            it()
+        }
         Spacer(Modifier.height(24.dp))
         // Schnellwahl: angeheftete Unterhaltungen direkt fortsetzen (Reihenfolge wie im Verlauf: zuletzt genutzt zuerst)
         if (pinned.isNotEmpty()) {

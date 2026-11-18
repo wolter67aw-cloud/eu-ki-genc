@@ -21,6 +21,8 @@ class KiApp : Application() {
         private set
     lateinit var updates: UpdateManager
         private set
+    /** Projekte (Anweisungen + Wissen) für den Chat. */
+    val projects: eu.kigenc.app.data.ProjectStore by lazy { eu.kigenc.app.data.ProjectStore(this) }
     val mistral = MistralClient()
     val tts: TtsController by lazy { TtsController(this) }
     /** Musik beim Start: Nr. 1 der Charts als Hörprobe. */

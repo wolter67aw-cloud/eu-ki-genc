@@ -12,12 +12,12 @@ import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 /**
- * Datensicherung als ZIP-Datei: Unterhaltungen, Aufgaben, erzeugte Bilder, Werkzeug-Ergebnisse
+ * Datensicherung als ZIP-Datei: Unterhaltungen, Projekte, Aufgaben, erzeugte Bilder, Werkzeug-Ergebnisse
  * und Einstellungen. API-Schlüssel werden aus Sicherheitsgründen NICHT mitgesichert.
  */
 object BackupManager {
     private val FOLDERS = listOf("chats", "images", "generated", "results", "ideas")
-    private val FILES = listOf("tasks.json")
+    private val FILES = listOf("tasks.json", "projects.json")
     private const val SETTINGS_ENTRY = "einstellungen.json"
 
     suspend fun export(context: Context, settings: SettingsRepository, target: Uri): Int = withContext(Dispatchers.IO) {
