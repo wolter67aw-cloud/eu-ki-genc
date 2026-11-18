@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -317,6 +318,18 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 SwitchRow(Icons.Outlined.RecordVoiceOver, "Antworten automatisch vorlesen", "Nutzt die Sprachausgabe deines Geräts", settings.autoSpeak) {
                     scope.launch { app.settings.setAutoSpeak(it) }
                 }
+            }
+
+            item { SectionTitle("Musik beim Start") }
+            item {
+                SwitchRow(
+                    Icons.Outlined.MusicNote, "Nr. 1 der Charts abspielen",
+                    "Beim Öffnen der App läuft eine 30-Sekunden-Hörprobe (Deezer) – nicht im Lautlos-Modus und nicht, wenn schon Musik läuft",
+                    settings.startMusic
+                ) { scope.launch { app.settings.setStartMusic(it) } }
+            }
+            if (settings.startMusic) {
+                item { MusicGenreChooser(settings.musicGenre) { id -> scope.launch { app.settings.setMusicGenre(id) } } }
             }
 
             item { SectionTitle("Updates") }
@@ -671,6 +684,50 @@ private val IMAGE_PROVIDERS = listOf(
 )
 
 private fun imageProviderLabel(id: String) = IMAGE_PROVIDERS.firstOrNull { it.first == id }?.second ?: "Automatisch (empfohlen)"
+
+/** Genre der Start-Musik wählen und direkt anhören. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun MusicGenreChooser(selected: Int, onSelect: (Int) -> Unit) {
+    val music = LocalContext.current.app.music
+    val playing by music.track.collectAsStateWithLifecycle()
+    val loading by music.loading.collectAsStateWithLifecycle()
+    val error by music.error.collectAsStateWithLifecycle()
+    Column(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+        Text("Genre", style = MaterialTheme.typography.labelLarge)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            eu.kigenc.app.data.MUSIC_GENRES.forEach { (id, name) ->
+                androidx.compose.material3.FilterChip(
+                    selected = id == selected,
+                    onClick = { onSelect(id) },
+                    label = { Text(name) },
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (playing != null || loading) {
+                OutlinedButton(onClick = { music.stop() }) { Text("Stoppen") }
+            } else {
+                OutlinedButton(onClick = { music.play(selected) }) {
+                    Icon(Icons.Outlined.MusicNote, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Jetzt anhören")
+                }
+            }
+            if (loading) {
+                Spacer(Modifier.width(12.dp))
+                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        Text(
+            "Eingeschaltet verbindet sich die App beim Start mit Deezer, um die aktuellen Charts und die Hörprobe zu laden. " +
+                "Den ganzen Song öffnest du über das Symbol in der Musik-Leiste.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
 
 @Composable
 private fun SectionTitle(text: String) {

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +34,10 @@ data class AppSettings(
     val cachedModels: List<String> = emptyList(),
     val imageProvider: String = IMAGE_AUTO,
     val bflKey: String = "",
+    /** Beim App-Start die Nr. 1 der Charts (Hörprobe) abspielen. */
+    val startMusic: Boolean = false,
+    /** Deezer-Genre für die Start-Musik (0 = alle Charts). */
+    val musicGenre: Int = 0,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
@@ -68,6 +73,8 @@ class SettingsRepository(private val context: Context) {
         val MODELS = stringPreferencesKey("cached_models")
         val IMAGE_PROVIDER = stringPreferencesKey("image_provider")
         val BFL_KEY = stringPreferencesKey("bfl_key_enc")
+        val START_MUSIC = booleanPreferencesKey("start_music")
+        val MUSIC_GENRE = intPreferencesKey("music_genre")
     }
 
     val settings: Flow<AppSettings> = combine(context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey) { p, shared ->
@@ -86,6 +93,8 @@ class SettingsRepository(private val context: Context) {
             cachedModels = p[Keys.MODELS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
             imageProvider = p[Keys.IMAGE_PROVIDER] ?: AppSettings.IMAGE_AUTO,
             bflKey = p[Keys.BFL_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
+            startMusic = p[Keys.START_MUSIC] ?: false,
+            musicGenre = p[Keys.MUSIC_GENRE] ?: 0,
         )
     }.flowOn(Dispatchers.IO)
 
@@ -109,6 +118,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setImageAgentId(id: String?) = context.dataStore.edit {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)
     }
+
+    suspend fun setStartMusic(v: Boolean) = context.dataStore.edit { it[Keys.START_MUSIC] = v }
+    suspend fun setMusicGenre(id: Int) = context.dataStore.edit { it[Keys.MUSIC_GENRE] = id }
 
     suspend fun setImageProvider(v: String) = context.dataStore.edit { it[Keys.IMAGE_PROVIDER] = v }
 

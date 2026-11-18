@@ -35,7 +35,11 @@ struct RootView: View {
             // „Was ist neu“ einmal nach einem Update – nicht bei einer Neuinstallation
             whatsNew = WhatsNew.pending(freshInstall: !settings.onboardingDone)
             refreshModelsIfNeeded()
+            // Musik beim Start (falls eingeschaltet): Nr. 1 der Charts als Hörprobe
+            ChartMusic.shared.playOnStart(settings: settings)
         }
+        // Leiste „Nr. 1 der Charts“ über der Tab-Leiste, solange die Hörprobe läuft
+        .overlay(alignment: .bottom) { NowPlayingBar().padding(.bottom, 56) }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { settings.onboardingDone = true; showOnboarding = false; if !settings.hasKey { tab = 4 } }
                 .interactiveDismissDisabled()
@@ -173,5 +177,34 @@ struct BetaGateView<Content: View>: View {
             .padding(28)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.backgroundGradient.ignoresSafeArea())
+    }
+}
+
+/// Kleine Leiste „Nr. 1 der Charts“ mit Stopp und „Ganzen Song öffnen“.
+struct NowPlayingBar: View {
+    @ObservedObject private var music = ChartMusic.shared
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        if let t = music.track {
+            HStack(spacing: 10) {
+                Image(systemName: "music.note").foregroundStyle(Theme.cyan)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Nr. 1 · \(t.genre) · Hörprobe via Deezer").font(.caption2).foregroundStyle(Theme.secondaryText)
+                    Text("\(t.title) – \(t.artist)").font(.callout.weight(.semibold)).lineLimit(1).foregroundStyle(Theme.text)
+                }
+                Spacer(minLength: 0)
+                Button { music.stop(); openURL(t.link) } label: { Image(systemName: "arrow.up.right.square").font(.title3) }
+                    .accessibilityLabel("Ganzen Song öffnen")
+                Button { music.stop() } label: { Image(systemName: "xmark.circle.fill").font(.title3) }
+                    .accessibilityLabel("Musik stoppen")
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 16))
+            .shadow(radius: 6, y: 2)
+            .padding(.horizontal, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .accessibilityElement(children: .contain)
+        }
     }
 }

@@ -64,6 +64,10 @@ final class AppSettings: ObservableObject {
     @Published var onboardingDone: Bool { didSet { d.set(onboardingDone, forKey: "onboarding_done") } }
     /// Gewähltes App-Design (Synthesizer-Skin).
     @Published var design: String { didSet { d.set(design, forKey: "design"); Theme.current = AppDesign.byID(design) } }
+    /// Beim App-Start die Nr. 1 der Charts (Hörprobe) abspielen.
+    @Published var startMusic: Bool { didSet { d.set(startMusic, forKey: "start_music") } }
+    /// Deezer-Genre für die Start-Musik (0 = alle Charts).
+    @Published var musicGenre: Int { didSet { d.set(musicGenre, forKey: "music_genre") } }
 
     var hasKey: Bool { !key.isEmpty }
     /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
@@ -85,6 +89,8 @@ final class AppSettings: ObservableObject {
         cachedModels = d.stringArray(forKey: "cached_models") ?? []
         onboardingDone = d.bool(forKey: "onboarding_done")
         design = d.string(forKey: "design") ?? "original"
+        startMusic = d.bool(forKey: "start_music")
+        musicGenre = d.integer(forKey: "music_genre")
     }
 
     static let defaultChatModels = ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "magistral-medium-latest", "ministral-8b-latest"]

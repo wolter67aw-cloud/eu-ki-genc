@@ -23,6 +23,8 @@ class KiApp : Application() {
         private set
     val mistral = MistralClient()
     val tts: TtsController by lazy { TtsController(this) }
+    /** Musik beim Start: Nr. 1 der Charts als Hörprobe. */
+    val music: eu.kigenc.app.data.ChartMusic by lazy { eu.kigenc.app.data.ChartMusic(this) }
 
     override fun onCreate() {
         super.onCreate()

@@ -22,6 +22,8 @@ struct KIGenCApp: App {
         }
         .onChange(of: scenePhase) { _, phase in
             session.handle(phase)
+            // App verlassen → Start-Musik verstummt
+            if phase == .background { ChartMusic.shared.stop() }
         }
     }
 }

@@ -116,7 +116,11 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        if (!isChangingConfigurations) prefs.edit().putLong("last_stop", System.currentTimeMillis()).apply()
+        if (!isChangingConfigurations) {
+            prefs.edit().putLong("last_stop", System.currentTimeMillis()).apply()
+            // App verlassen → Start-Musik verstummt
+            app.music.stop()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

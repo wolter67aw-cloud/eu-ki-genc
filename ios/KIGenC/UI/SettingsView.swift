@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
+    @ObservedObject private var music = ChartMusic.shared
     @State private var keyInput = ""
     @State private var bflInput = ""
     @State private var testStatus: String?
@@ -55,6 +56,24 @@ struct SettingsView: View {
                     Picker("Chat", selection: $settings.chatModel) { ForEach(models(AppSettings.defaultChatModels, settings.chatModel), id: \.self) { Text($0) } }
                     Picker("Code", selection: $settings.codeModel) { ForEach(models(AppSettings.defaultCodeModels, settings.codeModel), id: \.self) { Text($0) } }
                     Toggle("Antworten automatisch vorlesen", isOn: $settings.autoSpeak)
+                }
+                .listRowBackground(Theme.card)
+
+                Section {
+                    Toggle("Nr. 1 der Charts beim Start", isOn: $settings.startMusic)
+                    if settings.startMusic {
+                        Picker("Genre", selection: $settings.musicGenre) {
+                            ForEach(ChartMusic.genres, id: \.id) { Text($0.name).tag($0.id) }
+                        }
+                        if music.track != nil || music.loading {
+                            Button { music.stop() } label: { Label("Stoppen", systemImage: "stop.circle") }
+                        } else {
+                            Button { music.play(genre: settings.musicGenre) } label: { Label("Jetzt anhören", systemImage: "music.note") }
+                        }
+                        if let e = music.error { Text(e).font(.caption).foregroundStyle(.orange) }
+                    }
+                } header: { Text("Musik beim Start") } footer: {
+                    Text("Beim Öffnen der App läuft eine 30-Sekunden-Hörprobe der aktuellen Nr. 1 (Deezer) – nicht bei Lautlos-Schalter und nicht, wenn schon Musik läuft. Dazu verbindet sich die App mit Deezer.")
                 }
                 .listRowBackground(Theme.card)
 

@@ -24,6 +24,7 @@ Daten verlassen das Gerät nur, wenn du eine Funktion aktiv nutzt:
 | **Mistral AI** (Paris, Frankreich; Server in der EU) | Chat, Texte, Code, Bild- und Videoanalyse, Transkription, Recherche, Bildgenerierung | deine Eingaben, angehängte Fotos/Video-Standbilder/Dateien, Audioaufnahmen |
 | **Pollinations.ai** (nur wenn als Bildgenerator gewählt oder im Modus „Automatisch“ als Ausweich) | Bildgenerierung | nur der Bildtext (Prompt), keine Fotos |
 | **Black Forest Labs** (Freiburg, Deutschland; nur mit eigenem Schlüssel) | Bildgenerierung und gesichtstreue Fotobearbeitung | Bildtext und ggf. das zu bearbeitende Foto |
+| **Deezer** (Paris, Frankreich; nur wenn „Musik beim Start“ eingeschaltet ist oder du „Jetzt anhören“ tippst) | Aktuelle Charts und 30-Sekunden-Hörprobe | keine Inhalte von dir – nur der übliche Abruf (IP-Adresse, gewähltes Genre) |
 | **GitHub** (Microsoft) – nur in der GitHub-Version | Prüfung und Download von App-Updates | technische Verbindungsdaten (IP-Adresse) |
 
 Für die Nutzung von Mistral und Black Forest Labs verwendest du **deinen eigenen API-Schlüssel**; es gelten
@@ -55,8 +56,8 @@ Grund, optionale Details und – nur wenn du zustimmst – ein Ausschnitt des In
 
 Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit
 und Widerspruch sowie das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde. Da der Anbieter selbst
-keine personenbezogenen Daten von dir speichert, wende dich für Daten bei Mistral AI, Pollinations oder
-Black Forest Labs bitte direkt an diese Anbieter.
+keine personenbezogenen Daten von dir speichert, wende dich für Daten bei Mistral AI, Pollinations,
+Black Forest Labs oder Deezer bitte direkt an diese Anbieter.
 
 ## 8. Kinder
 

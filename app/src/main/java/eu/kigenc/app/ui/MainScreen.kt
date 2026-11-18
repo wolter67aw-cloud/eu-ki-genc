@@ -118,6 +118,8 @@ fun MainScreen(
             prefs.edit().putBoolean("asked_notifications", true).apply()
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+        // Musik beim Start (falls eingeschaltet): Nr. 1 der Charts als Hörprobe
+        app.music.playOnStart(app.settings.current())
         // Beim Start auf Updates prüfen.
         if (app.settings.current().autoUpdate) app.updates.check()
     }
@@ -137,6 +139,8 @@ fun MainScreen(
     val imeVisible = WindowInsets.isImeVisible
 
     Scaffold(
+        // Leiste „Nr. 1 der Charts“ erscheint über der Navigationsleiste, solange die Hörprobe läuft
+        snackbarHost = { eu.kigenc.app.ui.components.NowPlayingBar() },
         bottomBar = {
             if (!imeVisible) {
                 NavigationBar {
