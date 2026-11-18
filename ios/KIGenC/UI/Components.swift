@@ -162,6 +162,7 @@ struct ResultActions: View {
                 ShareLink(item: text) { Image(systemName: "square.and.arrow.up") }
                 Button { speaker.speaking ? speaker.stop() : speaker.speak(text) } label: { Image(systemName: speaker.speaking ? "stop.circle" : "speaker.wave.2") }
             }
+            if image == nil && !text.isEmpty { LivePreviewButton(text: text) }
             if image == nil && !text.isEmpty { ExportMenu(text: text) }
             Button {
                 ResultStore.shared.add(kind: kind, title: text.isEmpty ? kind : text, text: text, image: image?.jpegData(compressionQuality: 0.9))

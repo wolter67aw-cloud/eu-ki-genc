@@ -787,6 +787,7 @@ private fun MessageItem(
                         IconButton(onClick = onShare) {
                             Icon(Icons.Outlined.Share, "Teilen", Modifier.size(18.dp))
                         }
+                        if (!message.isError) eu.kigenc.app.ui.components.LivePreviewButton(message.text, 18)
                         if (!message.isError) eu.kigenc.app.ui.components.ExportButton(message.text, 18)
                         if (onRegenerate != null) {
                             IconButton(onClick = onRegenerate) {

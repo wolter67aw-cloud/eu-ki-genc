@@ -2,6 +2,7 @@
 
 package eu.kigenc.app.ui.tools
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -202,7 +203,7 @@ fun ResultCard(text: String, busy: Boolean, speakId: String, modifier: Modifier 
                 MarkdownText(text, onCopyCode = copy)
             }
             if (!busy && text.isNotEmpty()) {
-                Row {
+                Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
                     IconButton(onClick = { copy(text) }) { Icon(Icons.Outlined.ContentCopy, "Kopieren", Modifier.size(20.dp)) }
                     IconButton(onClick = { if (speaking == speakId) tts.stop() else tts.speak(speakId, text) }) {
                         Icon(
@@ -211,6 +212,7 @@ fun ResultCard(text: String, busy: Boolean, speakId: String, modifier: Modifier 
                         )
                     }
                     IconButton(onClick = { context.shareText(text) }) { Icon(Icons.Outlined.Share, "Teilen", Modifier.size(20.dp)) }
+                    eu.kigenc.app.ui.components.LivePreviewButton(text)
                     eu.kigenc.app.ui.components.ExportButton(text)
                     IconButton(onClick = { reporting = true }) { Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(20.dp)) }
                 }

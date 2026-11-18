@@ -308,6 +308,7 @@ private fun TextStudio(
                                 IconButton(onClick = { context.shareText(state.textOutput) }) {
                                     Icon(Icons.Outlined.Share, "Teilen", Modifier.size(20.dp))
                                 }
+                                eu.kigenc.app.ui.components.LivePreviewButton(state.textOutput)
                                 eu.kigenc.app.ui.components.ExportButton(state.textOutput)
                                 IconButton(onClick = { reportText = state.textOutput }) {
                                     Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(20.dp))
