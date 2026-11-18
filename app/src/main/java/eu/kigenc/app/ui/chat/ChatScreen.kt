@@ -110,6 +110,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -771,7 +772,8 @@ private fun MessageItem(
                     )
                 }
                 AnimatedVisibility(!streaming && message.text.isNotEmpty()) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                    // Bei schmalen Bildschirmen seitlich verschiebbar, damit alle Knöpfe erreichbar bleiben
+                    Row(horizontalArrangement = Arrangement.spacedBy(0.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                         IconButton(onClick = { onCopy(message.text) }) {
                             Icon(Icons.Outlined.ContentCopy, "Kopieren", Modifier.size(18.dp))
                         }
@@ -785,6 +787,7 @@ private fun MessageItem(
                         IconButton(onClick = onShare) {
                             Icon(Icons.Outlined.Share, "Teilen", Modifier.size(18.dp))
                         }
+                        if (!message.isError) eu.kigenc.app.ui.components.ExportButton(message.text, 18)
                         if (onRegenerate != null) {
                             IconButton(onClick = onRegenerate) {
                                 Icon(Icons.Outlined.Refresh, "Antwort neu erzeugen", Modifier.size(18.dp))

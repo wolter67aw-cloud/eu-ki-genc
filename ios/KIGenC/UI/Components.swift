@@ -162,6 +162,7 @@ struct ResultActions: View {
                 ShareLink(item: text) { Image(systemName: "square.and.arrow.up") }
                 Button { speaker.speaking ? speaker.stop() : speaker.speak(text) } label: { Image(systemName: speaker.speaking ? "stop.circle" : "speaker.wave.2") }
             }
+            if image == nil && !text.isEmpty { ExportMenu(text: text) }
             Button {
                 ResultStore.shared.add(kind: kind, title: text.isEmpty ? kind : text, text: text, image: image?.jpegData(compressionQuality: 0.9))
                 saved = true
@@ -170,6 +171,56 @@ struct ResultActions: View {
         .font(.callout)
         .foregroundStyle(Theme.cyan)
     }
+}
+
+/// „Als Datei“: Antwort als Word, PDF, Excel (bei Tabellen) oder Textdatei erzeugen und teilen/sichern.
+struct ExportMenu: View {
+    let text: String
+    @State private var file: ExportFile?
+    @State private var error: String?
+
+    struct ExportFile: Identifiable { let id = UUID(); let url: URL }
+
+    var body: some View {
+        Menu {
+            Button { make { try DocExport.docx(text) } } label: { Label("Word-Datei (.docx)", systemImage: "doc.richtext") }
+            Button { make { try DocExport.pdf(text) } } label: { Label("PDF", systemImage: "doc.text") }
+            if DocExport.hasTable(text) {
+                Button { make { try DocExport.xlsx(text) } } label: { Label("Tabelle als Excel (.xlsx)", systemImage: "tablecells") }
+            }
+            Button {
+                make {
+                    let url = FileManager.default.temporaryDirectory.appendingPathComponent(DocExport.fileName(text, ext: "md"))
+                    try text.write(to: url, atomically: true, encoding: .utf8)
+                    return url
+                }
+            } label: { Label("Textdatei (.md)", systemImage: "doc.plaintext") }
+        } label: {
+            Image(systemName: "arrow.down.doc")
+        }
+        .accessibilityLabel("Als Datei (Word, PDF, Excel)")
+        .sheet(item: $file) { f in ShareSheet(items: [f.url]) }
+        .alert("Datei konnte nicht erstellt werden", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            Button("OK", role: .cancel) { error = nil }
+        } message: { Text(error ?? "") }
+    }
+
+    @MainActor
+    private func make(_ build: @MainActor () throws -> URL) {
+        do { file = ExportFile(url: try build()) } catch {
+            ErrorLog.report(error, context: "Datei erzeugen")
+            self.error = friendly(error)
+        }
+    }
+}
+
+/// System-Teilen-Dialog (z. B. „In Dateien sichern“, Mail, WhatsApp).
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ vc: UIActivityViewController, context: Context) {}
 }
 
 /// Leiste zum Anhängen von Fotos, Videos und Dateien (mehrere auf einmal).

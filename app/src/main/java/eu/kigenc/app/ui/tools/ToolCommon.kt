@@ -211,6 +211,7 @@ fun ResultCard(text: String, busy: Boolean, speakId: String, modifier: Modifier 
                         )
                     }
                     IconButton(onClick = { context.shareText(text) }) { Icon(Icons.Outlined.Share, "Teilen", Modifier.size(20.dp)) }
+                    eu.kigenc.app.ui.components.ExportButton(text)
                     IconButton(onClick = { reporting = true }) { Icon(Icons.Outlined.Flag, "Inhalt melden", Modifier.size(20.dp)) }
                 }
             }
