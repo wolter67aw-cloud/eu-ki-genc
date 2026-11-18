@@ -23,6 +23,18 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - iOS-App (SwiftUI) mit denselben Funktionen; TestFlight-Upload sobald Apple-Secrets gesetzt sind
 
 ## Ideen-Speicher (noch offen)
+**Reihenfolge verbindlich (Wunsch des Nutzers, 18.11.2026): immer die OBERSTE offene Idee als Nächstes umsetzen,
+eine pro Lauf; erledigte Ideen hier streichen.** Claude-Funktionen werden mit Mistral nachgebaut (nicht Claude selbst).
+
+Claude-Funktionen (Wunsch des Nutzers, in dieser Reihenfolge):
+- Gedächtnis: App merkt sich Fakten über den Nutzer (Name, Beruf, Vorlieben) chatübergreifend – Liste unter Optionen einsehbar/bearbeitbar/löschbar, Schalter an/aus, „Merk dir …“ im Chat, Fakten gehen als Systemtext mit
+- Dateien erzeugen: Antwort als Word (.docx), PDF oder Excel/CSV speichern und teilen (ohne neue Bibliothek: DOCX/XLSX als ZIP+XML, PDF über PdfDocument bzw. UIGraphicsPDFRenderer)
+- Live-Vorschau (Artefakte): HTML/Web-Apps/Mermaid-Diagramme aus Antworten in der App ansehen (WebView/WKWebView, ohne Netz-Zugriff für Fremdinhalte)
+- Websuche im Chat: Schalter „Web“ im Chat – bei aktuellen Fragen Mistral-Websuche mit Quellenangabe (wie Recherche-Werkzeug)
+- Code ausführen & Datenanalyse: Mistral Code-Interpreter (Agents/Conversations-API) im Chat und im Daten-Werkzeug
+- Nachdenk-Modus & Stile: Schalter „Gründlich nachdenken“ (Magistral) und Antwortstil (Normal, Knapp, Ausführlich, Förmlich, Locker)
+
+Weitere Ideen:
 - iOS-Chat: Antwort neu erzeugen / eigene Nachricht bearbeiten (Android hat es bereits)
 - Widgets (Android-Startbildschirm) für Schnellerfassung
 - Barrierefreiheit: größere Schrift, TalkBack/VoiceOver-Beschriftungen prüfen
@@ -55,3 +67,4 @@ Commits mit „[intern]“ im Betreff kennzeichnen – sie werden nicht angezeig
 - 18.11.2026 (v1.0.79, iOS-Build 73): Übersetzen mit Mikrofon – im Übersetzen-Formular (Startseite) und in der Text-Werkstatt lässt sich der Text einsprechen; darunter „Mikrofon spricht: …“ zur Wahl der Sprechsprache (14 Sprachen, Standard Deutsch), z. B. Englisch sprechen und ins Deutsche übersetzen. Mikrofon zusätzlich in allen übrigen Inhaltsfeldern (Gerätesprache bzw. Deutsch). Android: System-Spracherkennung, keine neue Berechtigung; iOS: Diktat mit wählbarer Sprache. Keine Datenformat-Änderung. Android & iOS, beide Builds grün (iOS geprüft). Wunsch des Nutzers.
 - 18.11.2026 (v1.0.81, iOS-Build 75): Musik beim Start – Optionen → „Musik beim Start“: beim Öffnen der App läuft die aktuelle Nr. 1 der Charts als 30-Sekunden-Hörprobe (öffentliche Deezer-API, ohne Schlüssel), Genre wählbar (15 Genres, leere Genre-Charts → allgemeine Charts), „Jetzt anhören“ zum Ausprobieren. Standardmäßig AUS. Spielt höchstens alle 10 Min., nicht im Lautlos-/Vibrationsmodus (iOS: Lautlos-Schalter), nicht wenn schon Musik läuft; leise eingeblendet, stoppt beim Verlassen der App. Leiste über der Navigation mit Titel, „Ganzen Song öffnen“ (Deezer-Link) und Stopp. Ganze Songs aus Lizenzgründen nicht. Datenschutzerklärung um Deezer ergänzt. Neue Einstellungen start_music/music_genre (abwärtskompatibel). Keine neue Bibliothek/Berechtigung. Android & iOS, beide Builds grün (iOS geprüft). Wunsch des Nutzers.
 - 18.11.2026 (v1.0.83, iOS-Build 77): Mehrere Bilder/Dateien gemeinsam verarbeiten (Nutzer-Meldung). Foto-Editor: „Zu einem Bild zusammenfügen“ (Nebeneinander/Untereinander/Raster, ohne KI, Gesichter unverändert) → neues Foto, das gefiltert/gespeichert/mit KI bearbeitet werden kann; Hinweistext zur KI-Kombination (echt nur mit BFL-Schlüssel). Studio/Chat-Anhänge: Bilder reihum auf alle Anhänge verteilt (max. 8, je Anhang gleichmäßig gestreut), jeder Anhang benannt mit Bildnummern + Anweisung, alle gemeinsam auszuwerten – iOS nahm vorher nur die ersten 8 Bilder (spätere Fotos/PDF-Seiten fielen weg). Android-Chat: bis zu 6 Fotos pro Nachricht (neues optionales Feld imagePaths, imagePath bleibt erstes Bild → abwärtskompatibel). Android & iOS, beide Builds grün (iOS geprüft).
+- 18.11.2026 (v1.0.85, iOS-Build 79): Projekte wie bei Claude – im Chat „Projekt: … ▾“ (leere Chat-Ansicht) bzw. Verlauf → „Projekte“: Projekte anlegen/bearbeiten/löschen mit Name, Anweisungen und Wissen (Text-, Word-, PDF-Dateien, Notizen; Android: PDF-Seiten/Fotos werden einmalig per Vision-Modell abgeschrieben, iOS: PDF-Text direkt, Fotos per KI). Jeder Chat im Projekt bekommt Anweisungen + Wissen (max. 60.000 Zeichen) als Systemtext; neuer Chat bleibt im Projekt; Verlauf zeigt Projektnamen. Datenformat abwärtskompatibel (Conversation.projectId/projectID optional, neue Datei projects.json; Android-Sicherung enthält projects.json). Android & iOS, beide Builds grün (iOS geprüft). Wunsch des Nutzers (1. von 7 Claude-Funktionen).
