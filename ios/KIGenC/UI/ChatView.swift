@@ -14,6 +14,8 @@ final class ChatModel: ObservableObject {
     @Published var webSearch = false
     /// Code ausführen: die KI rechnet mit echtem Python-Code (Mistral Code-Interpreter).
     @Published var codeRun = false
+    /// Gründlich nachdenken: Reasoning-Modell (Magistral) statt des normalen Chat-Modells.
+    @Published var thinking = false
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -30,7 +32,8 @@ final class ChatModel: ObservableObject {
         if conversation.messages.count == 1 { conversation.title = String(shown.prefix(50)) }
         let projectText = ProjectStore.shared.byID(conversation.projectID)?.systemText() ?? ""
         let memoryText = settings.memoryEnabled ? MemoryStore.shared.systemText : ""
-        var apiMessages = [ApiMessage(role: "system", text: Self.system + memoryText + projectText)]
+        let style = AppSettings.styleText(settings.answerStyle)
+        var apiMessages = [ApiMessage(role: "system", text: Self.system + style + memoryText + projectText)]
         let history = conversation.messages.dropLast().suffix(20)
         for m in history where !m.isError { apiMessages.append(ApiMessage(role: m.role, text: m.text, images: m.role == "user" ? m.images : [])) }
         apiMessages.append(ApiMessage(role: "user", text: shown + extra, images: images))
@@ -39,12 +42,13 @@ final class ChatModel: ObservableObject {
         conversation.messages.append(ChatMessage(role: "assistant", text: ""))
         let index = conversation.messages.count - 1
         busy = true
-        let model = images.isEmpty ? settings.chatModel : (settings.chatModel.contains("ministral") || settings.chatModel.contains("magistral") ? "mistral-small-latest" : settings.chatModel)
+        let baseModel = images.isEmpty ? settings.chatModel : (settings.chatModel.contains("ministral") || settings.chatModel.contains("magistral") ? "mistral-small-latest" : settings.chatModel)
+        let model = thinking && !codeRun && !webSearch && images.isEmpty ? "magistral-medium-latest" : baseModel
         let useCode = codeRun && images.isEmpty
         let useWeb = !useCode && webSearch && images.isEmpty && extra.isEmpty
-        let codeInstructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. Diagramme mit matplotlib, Beschriftungen auf Deutsch." + memoryText + String(projectText.prefix(8_000))
+        let codeInstructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. Diagramme mit matplotlib, Beschriftungen auf Deutsch." + style + memoryText + String(projectText.prefix(8_000))
         let codeInput = useCode ? Self.webQuestion(history: Array(history), question: shown + extra, extras: "") : ""
-        let webQuestion = useWeb ? Self.webQuestion(history: Array(history), question: shown, extras: memoryText + String(projectText.prefix(8_000))) : ""
+        let webQuestion = useWeb ? Self.webQuestion(history: Array(history), question: shown, extras: style + memoryText + String(projectText.prefix(8_000))) : ""
         task = Task {
             do {
                 if useCode {
@@ -342,29 +346,46 @@ struct ChatView: View {
             if dictation.listening {
                 Text(dictation.transcript.isEmpty ? "Ich höre zu …" : dictation.transcript).font(.callout).foregroundStyle(Theme.cyan)
             }
+            if model.webSearch || model.codeRun || model.thinking {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        if model.webSearch { modeChip("Websuche", "globe") { model.webSearch = false } }
+                        if model.codeRun { modeChip("Code ausführen", "function") { model.codeRun = false } }
+                        if model.thinking { modeChip("Gründlich nachdenken", "brain") { model.thinking = false } }
+                    }
+                }
+            }
             if let e = dictation.error { Text(e).font(.caption).foregroundStyle(.orange) }
             HStack(alignment: .bottom, spacing: 10) {
                 Button { withAnimation { showAttach.toggle() } } label: {
                     Image(systemName: showAttach ? "xmark.circle" : "plus.circle").font(.title2)
                 }
-                Button {
-                    model.codeRun.toggle()
-                    if model.codeRun { model.webSearch = false }
-                    model.notice = model.codeRun ? "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" : "Code ausführen aus"
+                // Werkzeuge wie bei Claude: Websuche, Code ausführen, Gründlich nachdenken, Antwortstil
+                Menu {
+                    Toggle(isOn: Binding(get: { model.webSearch }, set: { on in
+                        model.webSearch = on; if on { model.codeRun = false }
+                        model.notice = on ? "Websuche an – Antworten mit aktuellen Quellen" : "Websuche aus"
+                    })) { Label("Websuche", systemImage: "globe") }
+                    Toggle(isOn: Binding(get: { model.codeRun }, set: { on in
+                        model.codeRun = on; if on { model.webSearch = false }
+                        model.notice = on ? "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" : "Code ausführen aus"
+                    })) { Label("Code ausführen", systemImage: "function") }
+                    Toggle(isOn: Binding(get: { model.thinking }, set: { on in
+                        model.thinking = on
+                        model.notice = on ? "Gründlich nachdenken an – Antworten dauern etwas länger" : "Gründlich nachdenken aus"
+                    })) { Label("Gründlich nachdenken", systemImage: "brain") }
+                    Picker(selection: Binding(get: { settings.answerStyle }, set: { id in
+                        settings.answerStyle = id
+                        model.notice = "Antwortstil: \(AppSettings.answerStyles.first { $0.id == id }?.name ?? "Normal")"
+                    })) {
+                        ForEach(AppSettings.answerStyles, id: \.id) { Text($0.name).tag($0.id) }
+                    } label: { Label("Antwortstil", systemImage: "textformat") }
+                    .pickerStyle(.menu)
                 } label: {
-                    Image(systemName: "function").font(.title2)
-                        .foregroundStyle(model.codeRun ? Theme.cyan : Theme.secondaryText)
+                    Image(systemName: "slider.horizontal.3").font(.title2)
+                        .foregroundStyle(model.webSearch || model.codeRun || model.thinking || settings.answerStyle != "normal" ? Theme.cyan : Theme.secondaryText)
                 }
-                .accessibilityLabel(model.codeRun ? "Code ausführen ausschalten" : "Code ausführen einschalten (Rechnen, Datenanalyse, Diagramme)")
-                Button {
-                    model.webSearch.toggle()
-                    if model.webSearch { model.codeRun = false }
-                    model.notice = model.webSearch ? "Websuche an – Antworten mit aktuellen Quellen" : "Websuche aus"
-                } label: {
-                    Image(systemName: "globe").font(.title2)
-                        .foregroundStyle(model.webSearch ? Theme.cyan : Theme.secondaryText)
-                }
-                .accessibilityLabel(model.webSearch ? "Websuche ausschalten" : "Websuche einschalten")
+                .accessibilityLabel("Werkzeuge: Websuche, Code ausführen, Nachdenken, Antwortstil")
                 TextField(model.webSearch ? "Frag mit Websuche …" : model.codeRun ? "Rechnen, auswerten, Diagramm …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
@@ -389,6 +410,21 @@ struct ChatView: View {
         .padding(.horizontal).padding(.vertical, 10)
         .background(Theme.navy.opacity(0.9))
         .disabled(!settings.hasKey)
+    }
+
+    /// Aktiver Modus über dem Eingabefeld – Antippen schaltet ihn aus.
+    private func modeChip(_ title: String, _ icon: String, off: @escaping () -> Void) -> some View {
+        Button(action: off) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                Text(title)
+                Image(systemName: "xmark")
+            }
+            .font(.caption).padding(.horizontal, 10).padding(.vertical, 5)
+            .background(Theme.card, in: Capsule())
+            .foregroundStyle(Theme.cyan)
+        }
+        .accessibilityLabel("\(title) ausschalten")
     }
 
     /// Volltextsuche über Titel und alle Nachrichten der gespeicherten Chats.

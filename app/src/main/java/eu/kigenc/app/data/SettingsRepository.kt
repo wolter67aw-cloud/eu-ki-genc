@@ -42,6 +42,8 @@ data class AppSettings(
     val memoryEnabled: Boolean = true,
     /** Gedächtnis: aus Nachrichten automatisch dazulernen. */
     val memoryAuto: Boolean = true,
+    /** Antwortstil im Chat (siehe [ANSWER_STYLES]). */
+    val answerStyle: String = "normal",
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
@@ -81,6 +83,7 @@ class SettingsRepository(private val context: Context) {
         val MUSIC_GENRE = intPreferencesKey("music_genre")
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val MEMORY_AUTO = booleanPreferencesKey("memory_auto")
+        val ANSWER_STYLE = stringPreferencesKey("answer_style")
     }
 
     val settings: Flow<AppSettings> = combine(context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey) { p, shared ->
@@ -103,6 +106,7 @@ class SettingsRepository(private val context: Context) {
             musicGenre = p[Keys.MUSIC_GENRE] ?: 0,
             memoryEnabled = p[Keys.MEMORY_ENABLED] ?: true,
             memoryAuto = p[Keys.MEMORY_AUTO] ?: true,
+            answerStyle = p[Keys.ANSWER_STYLE] ?: "normal",
         )
     }.flowOn(Dispatchers.IO)
 
@@ -127,6 +131,7 @@ class SettingsRepository(private val context: Context) {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)
     }
 
+    suspend fun setAnswerStyle(id: String) = context.dataStore.edit { it[Keys.ANSWER_STYLE] = id }
     suspend fun setMemoryEnabled(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_ENABLED] = v }
     suspend fun setMemoryAuto(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_AUTO] = v }
     suspend fun setStartMusic(v: Boolean) = context.dataStore.edit { it[Keys.START_MUSIC] = v }
@@ -142,3 +147,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCachedModels(models: List<String>) =
         context.dataStore.edit { it[Keys.MODELS] = models.joinToString("\n") }
 }
+
+/** Antwortstile wie bei Claude: Kennung → (Name, Anweisung an die KI). */
+val ANSWER_STYLES: List<Triple<String, String, String>> = listOf(
+    Triple("normal", "Normal", ""),
+    Triple("knapp", "Knapp", "Antworte so kurz wie möglich: wenige Sätze, nur das Wesentliche, keine Einleitung."),
+    Triple("ausfuehrlich", "Ausführlich", "Antworte ausführlich und gründlich, mit Erklärungen, Beispielen und klarer Gliederung."),
+    Triple("foermlich", "Förmlich", "Antworte sachlich und förmlich in der Sie-Form, professionell und präzise."),
+    Triple("locker", "Locker", "Antworte locker und freundlich in der Du-Form, gern mit einem Augenzwinkern."),
+    Triple("einfach", "Einfach erklärt", "Erkläre alles in einfacher Sprache: kurze Sätze, keine Fachbegriffe (oder sofort erklärt), wie für Einsteiger."),
+)
+
+/** Zusatz für den Systemtext zum gewählten Antwortstil (leer bei „Normal“). */
+fun answerStyleText(id: String): String =
+    ANSWER_STYLES.firstOrNull { it.first == id }?.third?.takeIf { it.isNotBlank() }?.let { "\n\nAntwortstil: $it" }.orEmpty()

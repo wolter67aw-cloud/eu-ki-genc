@@ -41,6 +41,8 @@ data class ChatUiState(
     val webSearch: Boolean = false,
     /** Code ausführen: die KI rechnet mit echtem Python-Code (Mistral Code-Interpreter). */
     val codeRun: Boolean = false,
+    /** Gründlich nachdenken: Reasoning-Modell (Magistral) statt des normalen Chat-Modells. */
+    val thinking: Boolean = false,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
@@ -50,6 +52,8 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
         const val MAX_IMAGES = 6
         /** Höchstzahl Bilder pro Anfrage an die KI (über den ganzen Verlauf). */
         private const val MAX_API_IMAGES = 8
+        /** Reasoning-Modell für „Gründlich nachdenken“. */
+        const val THINKING_MODEL = "magistral-medium-latest"
         /** Modell für den Code-Interpreter, falls das gewählte es nicht unterstützt. */
         private const val CODE_RUN_FALLBACK = "mistral-medium-latest"
     }
@@ -108,6 +112,17 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
     fun toggleWebSearch() = _state.update {
         val on = !it.webSearch
         it.copy(webSearch = on, codeRun = if (on) false else it.codeRun, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
+    }
+
+    fun toggleThinking() = _state.update {
+        val on = !it.thinking
+        it.copy(thinking = on, notice = if (on) "Gründlich nachdenken an – Antworten dauern etwas länger" else "Gründlich nachdenken aus")
+    }
+
+    fun setAnswerStyle(id: String) {
+        viewModelScope.launch { app.settings.setAnswerStyle(id) }
+        val name = eu.kigenc.app.data.ANSWER_STYLES.firstOrNull { it.first == id }?.second ?: "Normal"
+        _state.update { it.copy(notice = "Antwortstil: $name") }
     }
 
     fun toggleCodeRun() = _state.update {
@@ -216,7 +231,12 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 }
                 return@launch
             }
-            val model = if (mode == ChatMode.CODE) settings.codeModel else settings.chatModel
+            val model = when {
+                mode == ChatMode.CODE -> settings.codeModel
+                _state.value.thinking && !_state.value.codeRun && !_state.value.webSearch -> THINKING_MODEL
+                else -> settings.chatModel
+            }
+            val style = if (mode == ChatMode.CHAT) eu.kigenc.app.data.answerStyleText(settings.answerStyle) else ""
             val userMessage = ChatMessage(
                 role = Role.USER,
                 text = text.trim().ifEmpty {
@@ -252,7 +272,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
                     val instructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, " +
                         "Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. " +
-                        "Diagramme mit matplotlib, Beschriftungen auf Deutsch." + memoryText + (project?.systemText(8_000) ?: "")
+                        "Diagramme mit matplotlib, Beschriftungen auf Deutsch." + style + memoryText + (project?.systemText(8_000) ?: "")
                     val question = webQuestion(history, "")
                     val run = try {
                         app.mistral.runCode(settings.apiKey, model, instructions, question)
@@ -265,7 +285,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 } else if (_state.value.webSearch && mode == ChatMode.CHAT && images.isEmpty()) {
                     // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
                     val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
-                    val r = app.mistral.webSearch(settings.apiKey, model, webQuestion(history, memoryText + (project?.systemText(8_000) ?: "")))
+                    val r = app.mistral.webSearch(settings.apiKey, model, webQuestion(history, style + memoryText + (project?.systemText(8_000) ?: "")))
                     answer.append(r.text.ifBlank { "(keine Antwort)" })
                     if (r.sources.isNotEmpty()) {
                         answer.append("\n\n**Quellen:**\n")
@@ -276,7 +296,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                     model = model,
                     messages = buildApiMessages(
                         history, project,
-                        memory = if (settings.memoryEnabled) app.memory.systemText() else "",
+                        memory = style + if (settings.memoryEnabled) app.memory.systemText() else "",
                     ),
                     temperature = if (mode == ChatMode.CODE) 0.2 else 0.7,
                 ).collect { delta ->

@@ -63,6 +63,8 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Calculate
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.RecordVoiceOver
@@ -331,6 +333,10 @@ fun ChatScreen(
                 onToggleWeb = vm::toggleWebSearch,
                 codeRun = if (isCode) null else state.codeRun,
                 onToggleCode = vm::toggleCodeRun,
+                thinking = state.thinking,
+                onToggleThinking = vm::toggleThinking,
+                answerStyle = settings?.answerStyle ?: "normal",
+                onAnswerStyle = vm::setAnswerStyle,
                 streaming = state.streaming,
                 allowImages = !isCode,
                 placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag KI-GenC …",
@@ -835,6 +841,10 @@ private fun InputBar(
     onToggleWeb: () -> Unit,
     codeRun: Boolean?,
     onToggleCode: () -> Unit,
+    thinking: Boolean,
+    onToggleThinking: () -> Unit,
+    answerStyle: String,
+    onAnswerStyle: (String) -> Unit,
     streaming: Boolean,
     allowImages: Boolean,
     placeholder: String,
@@ -886,6 +896,13 @@ private fun InputBar(
                     )
                 }
             }
+            if (webSearch == true || codeRun == true || thinking) {
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 4.dp)) {
+                    if (webSearch == true) item { ModeChip("Websuche", Icons.Outlined.Language, onToggleWeb) }
+                    if (codeRun == true) item { ModeChip("Code ausführen", Icons.Outlined.Calculate, onToggleCode) }
+                    if (thinking) item { ModeChip("Gründlich nachdenken", Icons.Outlined.Psychology, onToggleThinking) }
+                }
+            }
             Row(verticalAlignment = Alignment.Bottom) {
                 if (allowImages) {
                     var menu by remember { mutableStateOf(false) }
@@ -907,22 +924,32 @@ private fun InputBar(
                         }
                     }
                 }
-                if (codeRun != null) {
-                    IconButton(onClick = onToggleCode) {
-                        Icon(
-                            Icons.Outlined.Calculate,
-                            contentDescription = if (codeRun) "Code ausführen ausschalten" else "Code ausführen einschalten (Rechnen, Datenanalyse, Diagramme)",
-                            tint = if (codeRun) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-                if (webSearch != null) {
-                    IconButton(onClick = onToggleWeb) {
-                        Icon(
-                            Icons.Outlined.Language,
-                            contentDescription = if (webSearch) "Websuche ausschalten" else "Websuche einschalten",
-                            tint = if (webSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                if (codeRun != null && webSearch != null) {
+                    // Werkzeuge wie bei Claude: Websuche, Code ausführen, Gründlich nachdenken, Antwortstil
+                    var tools by remember { mutableStateOf(false) }
+                    val active = webSearch || codeRun || thinking || answerStyle != "normal"
+                    Box {
+                        IconButton(onClick = { tools = true }) {
+                            Icon(
+                                Icons.Outlined.Tune,
+                                contentDescription = "Werkzeuge: Websuche, Code ausführen, Nachdenken, Antwortstil",
+                                tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        DropdownMenu(expanded = tools, onDismissRequest = { tools = false }) {
+                            ToolToggleItem("Websuche", "Aktuelle Infos mit Quellen", Icons.Outlined.Language, webSearch) { onToggleWeb(); tools = false }
+                            ToolToggleItem("Code ausführen", "Rechnen, Daten, Diagramme", Icons.Outlined.Calculate, codeRun) { onToggleCode(); tools = false }
+                            ToolToggleItem("Gründlich nachdenken", "Magistral – langsamer, sorgfältiger", Icons.Outlined.Psychology, thinking) { onToggleThinking(); tools = false }
+                            androidx.compose.material3.HorizontalDivider()
+                            Text("Antwortstil", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                            eu.kigenc.app.data.ANSWER_STYLES.forEach { (id, label, _) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    leadingIcon = { androidx.compose.material3.RadioButton(selected = id == answerStyle, onClick = null) },
+                                    onClick = { onAnswerStyle(id); tools = false }
+                                )
+                            }
+                        }
                     }
                 }
                 OutlinedTextField(
@@ -1028,4 +1055,26 @@ private fun historySnippet(conv: Conversation, query: String, highlight: SpanSty
         if (end < text.length) append("…")
         if (hits > 1) append("  ($hits Treffer)")
     }
+}
+
+/** Aktiver Modus über dem Eingabefeld – Antippen schaltet ihn aus. */
+@Composable
+private fun ModeChip(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onOff: () -> Unit) {
+    androidx.compose.material3.InputChip(
+        selected = true,
+        onClick = onOff,
+        label = { Text(label) },
+        leadingIcon = { Icon(icon, null, Modifier.size(16.dp)) },
+        trailingIcon = { Icon(Icons.Filled.Close, "$label ausschalten", Modifier.size(16.dp)) },
+    )
+}
+
+@Composable
+private fun ToolToggleItem(label: String, sub: String, icon: androidx.compose.ui.graphics.vector.ImageVector, on: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Column { Text(label); Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+        leadingIcon = { Icon(icon, null, tint = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) },
+        trailingIcon = { androidx.compose.material3.Checkbox(checked = on, onCheckedChange = null) },
+        onClick = onClick,
+    )
 }

@@ -72,6 +72,8 @@ final class AppSettings: ObservableObject {
     @Published var memoryEnabled: Bool { didSet { d.set(memoryEnabled, forKey: "memory_enabled") } }
     /// Gedächtnis: aus Nachrichten automatisch dazulernen.
     @Published var memoryAuto: Bool { didSet { d.set(memoryAuto, forKey: "memory_auto") } }
+    /// Antwortstil im Chat (siehe `answerStyles`).
+    @Published var answerStyle: String { didSet { d.set(answerStyle, forKey: "answer_style") } }
 
     var hasKey: Bool { !key.isEmpty }
     /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
@@ -97,6 +99,23 @@ final class AppSettings: ObservableObject {
         musicGenre = d.integer(forKey: "music_genre")
         memoryEnabled = d.object(forKey: "memory_enabled") as? Bool ?? true
         memoryAuto = d.object(forKey: "memory_auto") as? Bool ?? true
+        answerStyle = d.string(forKey: "answer_style") ?? "normal"
+    }
+
+    /// Antwortstile wie bei Claude: Kennung, Name, Anweisung an die KI.
+    static let answerStyles: [(id: String, name: String, text: String)] = [
+        ("normal", "Normal", ""),
+        ("knapp", "Knapp", "Antworte so kurz wie möglich: wenige Sätze, nur das Wesentliche, keine Einleitung."),
+        ("ausfuehrlich", "Ausführlich", "Antworte ausführlich und gründlich, mit Erklärungen, Beispielen und klarer Gliederung."),
+        ("foermlich", "Förmlich", "Antworte sachlich und förmlich in der Sie-Form, professionell und präzise."),
+        ("locker", "Locker", "Antworte locker und freundlich in der Du-Form, gern mit einem Augenzwinkern."),
+        ("einfach", "Einfach erklärt", "Erkläre alles in einfacher Sprache: kurze Sätze, keine Fachbegriffe (oder sofort erklärt), wie für Einsteiger."),
+    ]
+
+    /// Zusatz für den Systemtext zum gewählten Antwortstil (leer bei „Normal“).
+    static func styleText(_ id: String) -> String {
+        guard let t = answerStyles.first(where: { $0.id == id })?.text, !t.isEmpty else { return "" }
+        return "\n\nAntwortstil: " + t
     }
 
     static let defaultChatModels = ["mistral-small-latest", "mistral-medium-latest", "mistral-large-latest", "magistral-medium-latest", "ministral-8b-latest"]
