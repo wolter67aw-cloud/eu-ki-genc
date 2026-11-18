@@ -61,6 +61,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.RecordVoiceOver
@@ -324,6 +325,8 @@ fun ChatScreen(
                 text = input,
                 onTextChange = { input = it },
                 attachedImages = state.attachedImages,
+                webSearch = if (isCode) null else state.webSearch,
+                onToggleWeb = vm::toggleWebSearch,
                 streaming = state.streaming,
                 allowImages = !isCode,
                 placeholder = if (isCode) "Beschreibe den Code, den du brauchst …" else "Frag KI-GenC …",
@@ -811,6 +814,8 @@ private fun InputBar(
     text: String,
     onTextChange: (String) -> Unit,
     attachedImages: List<String>,
+    webSearch: Boolean?,
+    onToggleWeb: () -> Unit,
     streaming: Boolean,
     allowImages: Boolean,
     placeholder: String,
@@ -883,10 +888,19 @@ private fun InputBar(
                         }
                     }
                 }
+                if (webSearch != null) {
+                    IconButton(onClick = onToggleWeb) {
+                        Icon(
+                            Icons.Outlined.Language,
+                            contentDescription = if (webSearch) "Websuche ausschalten" else "Websuche einschalten",
+                            tint = if (webSearch) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 OutlinedTextField(
                     value = text,
                     onValueChange = onTextChange,
-                    placeholder = { Text(placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    placeholder = { Text(if (webSearch == true) "Frag mit Websuche …" else placeholder, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     maxLines = 6,
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(

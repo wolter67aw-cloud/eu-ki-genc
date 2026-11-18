@@ -37,6 +37,8 @@ data class ChatUiState(
     val error: String? = null,
     /** Kurzer Hinweis (z. B. „Gemerkt“). */
     val notice: String? = null,
+    /** Websuche für die nächsten Fragen (Antwort mit aktuellen Quellen). */
+    val webSearch: Boolean = false,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
@@ -98,6 +100,11 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun clearError() = _state.update { it.copy(error = null) }
     fun clearNotice() = _state.update { it.copy(notice = null) }
+
+    fun toggleWebSearch() = _state.update {
+        val on = !it.webSearch
+        it.copy(webSearch = on, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
+    }
 
     fun reportError(message: String) = _state.update { it.copy(error = message) }
 
@@ -227,11 +234,21 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             var failed: String? = null
             var lastUiUpdate = 0L
             try {
-                app.mistral.streamChat(
+                val project = app.projects.byId(base.projectId)
+                if (_state.value.webSearch && mode == ChatMode.CHAT && images.isEmpty()) {
+                    // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
+                    val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
+                    val r = app.mistral.webSearch(settings.apiKey, model, webQuestion(history, memoryText + (project?.systemText(8_000) ?: "")))
+                    answer.append(r.text.ifBlank { "(keine Antwort)" })
+                    if (r.sources.isNotEmpty()) {
+                        answer.append("\n\n**Quellen:**\n")
+                        answer.append(r.sources.mapIndexed { i, (title, url) -> "${i + 1}. [${title.replace("[", "").replace("]", "")}]($url)" }.joinToString("\n"))
+                    }
+                } else app.mistral.streamChat(
                     apiKey = settings.apiKey,
                     model = model,
                     messages = buildApiMessages(
-                        history, app.projects.byId(base.projectId),
+                        history, project,
                         memory = if (settings.memoryEnabled) app.memory.systemText() else "",
                     ),
                     temperature = if (mode == ChatMode.CODE) 0.2 else 0.7,
@@ -328,6 +345,19 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 )
             }
         }
+    }
+
+    /** Frage für die Websuche: Hinweise + die letzten Nachrichten als Zusammenhang + aktuelle Frage. */
+    private fun webQuestion(history: List<ChatMessage>, extras: String): String = buildString {
+        val today = LocalDate.now().format(DateTimeFormatter.ofPattern("d. MMMM yyyy", Locale.GERMAN))
+        append("Heute ist $today.")
+        if (extras.isNotBlank()) append(extras)
+        val previous = history.dropLast(1).filterNot { it.isError }.takeLast(8)
+        if (previous.isNotEmpty()) {
+            append("\n\nBisheriger Gesprächsverlauf (nur als Zusammenhang):\n")
+            previous.forEach { m -> append(if (m.role == Role.USER) "Nutzer: " else "KI: ").append(m.text.take(1500)).append("\n") }
+        }
+        append("\n\nAktuelle Frage des Nutzers:\n").append(history.last().text)
     }
 
     /** Gedächtnis pflegen: „Merk dir …“ immer, sonst (falls eingeschaltet) automatisch dazulernen. */

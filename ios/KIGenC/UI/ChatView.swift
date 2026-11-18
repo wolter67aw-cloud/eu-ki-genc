@@ -10,6 +10,8 @@ final class ChatModel: ObservableObject {
     @Published var project: Project?
     /// Kurzer Hinweis (z. B. „Gemerkt: …“).
     @Published var notice: String?
+    /// Websuche für die nächsten Fragen (Antwort mit aktuellen Quellen).
+    @Published var webSearch = false
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -36,10 +38,24 @@ final class ChatModel: ObservableObject {
         let index = conversation.messages.count - 1
         busy = true
         let model = images.isEmpty ? settings.chatModel : (settings.chatModel.contains("ministral") || settings.chatModel.contains("magistral") ? "mistral-small-latest" : settings.chatModel)
+        let useWeb = webSearch && images.isEmpty && extra.isEmpty
+        let webQuestion = useWeb ? Self.webQuestion(history: Array(history), question: shown, extras: memoryText + String(projectText.prefix(8_000))) : ""
         task = Task {
             do {
-                for try await chunk in MistralClient.shared.stream(key: settings.key, model: model, messages: apiMessages) {
-                    conversation.messages[index].text += chunk
+                if useWeb {
+                    // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
+                    let (answer, sources) = try await MistralClient.shared.webSearch(key: settings.key, model: model, question: webQuestion)
+                    var t = answer.isEmpty ? "(keine Antwort)" : answer
+                    if !sources.isEmpty {
+                        t += "\n\n**Quellen:**\n" + sources.enumerated().map { i, s in
+                            "\(i + 1). [\(s.0.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: ""))](\(s.1))"
+                        }.joined(separator: "\n")
+                    }
+                    conversation.messages[index].text = t
+                } else {
+                    for try await chunk in MistralClient.shared.stream(key: settings.key, model: model, messages: apiMessages) {
+                        conversation.messages[index].text += chunk
+                    }
                 }
                 if conversation.messages[index].text.isEmpty { conversation.messages[index].text = "(keine Antwort)" }
                 if settings.autoSpeak { Speaker.shared.speak(conversation.messages[index].text) }
@@ -58,6 +74,18 @@ final class ChatModel: ObservableObject {
     func stop() {
         task?.cancel()
         busy = false
+    }
+
+    /// Frage für die Websuche: Hinweise + letzte Nachrichten als Zusammenhang + aktuelle Frage.
+    static func webQuestion(history: [ChatMessage], question: String, extras: String) -> String {
+        let f = DateFormatter(); f.locale = Locale(identifier: "de_DE"); f.dateFormat = "d. MMMM yyyy"
+        var s = "Heute ist \(f.string(from: Date()))." + extras
+        let previous = history.filter { !$0.isError }.suffix(8)
+        if !previous.isEmpty {
+            s += "\n\nBisheriger Gesprächsverlauf (nur als Zusammenhang):\n"
+            for m in previous { s += (m.role == "user" ? "Nutzer: " : "KI: ") + String(m.text.prefix(1500)) + "\n" }
+        }
+        return s + "\n\nAktuelle Frage des Nutzers:\n" + question
     }
 
     /// Gedächtnis pflegen: „Merk dir …“ immer, sonst (falls eingeschaltet) automatisch dazulernen.
@@ -304,7 +332,15 @@ struct ChatView: View {
                 Button { withAnimation { showAttach.toggle() } } label: {
                     Image(systemName: showAttach ? "xmark.circle" : "plus.circle").font(.title2)
                 }
-                TextField("Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
+                Button {
+                    model.webSearch.toggle()
+                    model.notice = model.webSearch ? "Websuche an – Antworten mit aktuellen Quellen" : "Websuche aus"
+                } label: {
+                    Image(systemName: "globe").font(.title2)
+                        .foregroundStyle(model.webSearch ? Theme.cyan : Theme.secondaryText)
+                }
+                .accessibilityLabel(model.webSearch ? "Websuche ausschalten" : "Websuche einschalten")
+                TextField(model.webSearch ? "Frag mit Websuche …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.horizontal, 12).padding(.vertical, 9)
