@@ -1,34 +1,70 @@
 # Store-Eintrag – KI-GenC
 
-**App-Name:** KI-GenC – Europäische KI
+**App-Name (max. 30 Zeichen):** KI-GenC – Europäische KI
 
 **Kurzbeschreibung (max. 80 Zeichen):**
-Europäische KI für Chat, Texte, Bilder, Videos, Sprache und Code – ohne Tracking.
+Europäische KI für Chat, Texte, Bilder, Sprache und Code – ohne Werbung.
 
-**Ausführliche Beschreibung:**
+**Ausführliche Beschreibung (ohne Emojis, Stand 19.11.2026):**
 
-KI-GenC ist deine vielseitige KI-Assistenz – mit Mistral AI aus Europa.
+```
+KI-GenC ist deine vielseitige KI-Assistenz mit Mistral AI aus Europa. Sag einfach in eigenen Worten, was du brauchst – oder wähle Schritt für Schritt aus 12 Bereichen.
 
-💬 **Chat** – Fragen stellen, Antworten vorlesen lassen, per Sprache eingeben, Fotos mitschicken
-✍️ **Studio** – E-Mails, Berichte, Zusammenfassungen, Übersetzungen in 23 Sprachen, Textanalyse, Lernhilfe mit Übungen
-🖼️ **Bilder** – Bilder erzeugen in vielen Stilen, Fotos bearbeiten und verbessern, Vorlagen nutzen
-🎬 **Video** – Videos analysieren, Diashows mit Musik und Übergängen erstellen
-🎙️ **Transkription** – Sprache und Audiodateien in Text umwandeln, Protokolle erstellen
-📊 **Daten** – Tabellen (CSV) auswerten, Statistiken, Trends und Prognosen
-✅ **Aufgaben** – Termine aus Freitext erkennen, Erinnerungen, Tagesplan
-🔎 **Recherche** – aktuelle Infos aus dem Web mit Quellen
-💻 **Code** – Programme schreiben, Fehler finden, Automatisierungen
+CHAT
+• Fragen stellen, Fotos und Dateien mitschicken, per Sprache eingeben, Antworten vorlesen lassen
+• Websuche mit Quellenangaben für aktuelle Themen
+• „Gründlich nachdenken“ für knifflige Fragen
+• Code ausführen: genaue Berechnungen und Diagramme mit echtem Python-Code
+• Antwortstil wählen: knapp, ausführlich, förmlich, locker oder einfach erklärt
+• Projekte mit eigenen Anweisungen und Wissen (Texte, PDF, Word)
+• Gedächtnis: Die KI merkt sich, was du ihr sagst – jederzeit ansehen und löschen
+• Antworten als Word, PDF oder Excel speichern und teilen
+• Live-Vorschau für Webseiten, Grafiken und Diagramme aus Antworten
 
-🔒 **Datenschutz:** keine Werbung, kein Tracking. Daten bleiben auf deinem Gerät; Anfragen gehen an
-Mistral AI (Server in der EU). Du nutzt deinen eigenen, kostenlosen Mistral-Schlüssel.
+STUDIO
+• E-Mails, Briefe, Berichte, Zusammenfassungen und Social-Media-Texte
+• Übersetzen in 23 Sprachen – auch per Mikrofon
+• Bilder erzeugen in vielen Stilen, mit Referenzfotos
+
+WERKZEUGE
+• Foto-Editor: verbessern, Filter, mehrere Fotos zusammenfügen, KI-Bearbeitung
+• Video: analysieren und Diashows aus deinen Fotos erstellen
+• Audio-Transkription: Sprache in Text, Protokoll und Zusammenfassung
+• Daten-Analyse: Tabellen (CSV) auswerten, Statistiken und Prognosen
+• Aufgaben und Termine mit Erinnerung
+• Recherche mit Quellen
+• Ideen-Sammlung mit Sprachmemo, Skizze und Zeitkapsel
+• Code-Assistent: Programme schreiben, erklären und Fehler finden
+
+DESIGN
+15 Designs und mehrere App-Symbole zur Auswahl.
+
+DATENSCHUTZ
+Keine Werbung, kein Tracking, kein Benutzerkonto. Unterhaltungen, Bilder und Einstellungen bleiben auf deinem Gerät. Deine Anfragen gehen an Mistral AI (Rechenzentren in der EU). Du nutzt deinen eigenen Mistral-Schlüssel – der Tarif „Experiment“ ist kostenlos und in wenigen Minuten eingerichtet.
+
+KI-Antworten können Fehler enthalten. Unangemessene KI-Inhalte kannst du direkt in der App melden.
+
+KI-GenC ist ein unabhängiges Angebot und steht in keiner Verbindung zu Mistral AI.
+```
 
 **Kategorie:** Produktivität
-**Inhaltsfreigabe:** Fragebogen ausfüllen (KI-generierte Inhalte; Meldefunktion vorhanden)
+**Zielgruppe:** 18 Jahre und älter
 **Datenschutzerklärung (URL):** https://github.com/wolter67aw-cloud/eu-ki-genc/blob/main/docs/datenschutz.md
 
-## Checkliste vor der Veröffentlichung
-1. In `docs/datenschutz.md` Name, Anschrift und Kontakt-E-Mail eintragen.
-2. In `gradle.properties` `reportEmail=deine@adresse` setzen (Meldungen gehen dann per E-Mail an dich).
-3. Datei **KI-GenC-PlayStore.aab** aus dem neuesten GitHub-Release in der Play Console hochladen.
-4. Geschlossenen Test mit mindestens 12 Testern für 14 Tage durchführen.
-5. App-Icon: `docs/play-store-icon-512.png`
+## Grafiken
+- App-Symbol 512 × 512: `docs/play-store-icon-512.png`
+- Vorstellungsgrafik 1024 × 500: `docs/play-store/vorstellungsgrafik-1024x500.png`
+- 6 Screenshots 1080 × 1920: `docs/play-store/screenshot-*.png` (Nachbauten der echten Ansichten,
+  neu erzeugen mit `python3 scripts/play_store_grafiken.py`)
+
+## Checkliste
+1. ✅ Datenschutzerklärung mit Name, Anschrift und E-Mail
+2. ✅ `reportEmail` in `gradle.properties` (Meldungen von KI-Inhalten per E-Mail)
+3. ✅ Ziel-API 37 (Google verlangt seit 31.08.2026 mindestens 36)
+4. App in der Play Console anlegen, Store-Eintrag und App-Inhalte ausfüllen
+5. **KI-GenC-PlayStore.aab** aus dem neuesten GitHub-Release im geschlossenen Test hochladen
+6. Geschlossener Test: mindestens 12 Tester, 14 Tage ohne Unterbrechung
+7. Produktionszugang beantragen
+
+Ausführliche Schritt-für-Schritt-Anleitung mit allen Formular-Antworten: Claude-Dokument
+„KI-GenC im Google Play Store – Schritt für Schritt“ (19.11.2026).
