@@ -31,7 +31,12 @@ Für die Nutzung von Mistral und Black Forest Labs verwendest du **deinen eigene
 zusätzlich die Datenschutzbestimmungen dieser Anbieter. Hinweis: Im kostenlosen Tarif von Mistral können
 Anfragen zum Training der Modelle verwendet werden.
 
-Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung der von dir angeforderten Funktion).
+Vor der ersten Nutzung weist dich die App in einem **Datenschutz-Hinweis** auf diese Übertragung hin und
+fragt nach deiner Zustimmung. Ohne Zustimmung werden keine Anfragen an KI-Dienste gesendet. Du kannst die
+Zustimmung jederzeit unter **Optionen** widerrufen.
+
+Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (Bereitstellung der von dir angeforderten Funktion) sowie
+deine Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO.
 
 ## 4. Speicherung auf dem Gerät
 

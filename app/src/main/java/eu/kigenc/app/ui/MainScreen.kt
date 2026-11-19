@@ -101,6 +101,8 @@ fun MainScreen(
 
     val updateState by app.updates.state.collectAsStateWithLifecycle()
     var showOnboarding by rememberSaveable { mutableStateOf(false) }
+    // Datenschutz-Hinweis: einmal zustimmen, bevor Daten an KI-Dienste gehen (auch für bisherige Nutzer)
+    var showConsent by rememberSaveable { mutableStateOf(!AiConsent.given(context)) }
     LaunchedEffect(Unit) {
         val prefs = context.getSharedPreferences("app_state", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("onboarding_done", false) && !app.settings.current().hasKey) showOnboarding = true
@@ -184,7 +186,19 @@ fun MainScreen(
         }
     }
 
-    if (showOnboarding) {
+    if (showConsent) {
+        ConsentDialog(
+            onAccept = { AiConsent.set(context, true); showConsent = false },
+            // Ohne Zustimmung keine KI-Anfragen → App schließen; beim nächsten Start wird erneut gefragt.
+            onDecline = {
+                var c: Context? = context
+                while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+                (c as? android.app.Activity)?.finish()
+            },
+        )
+    }
+
+    if (showOnboarding && !showConsent) {
         OnboardingDialog(onDone = {
             context.getSharedPreferences("app_state", Context.MODE_PRIVATE).edit().putBoolean("onboarding_done", true).apply()
             showOnboarding = false
@@ -199,13 +213,13 @@ fun MainScreen(
     }
     // „Was ist neu“ einmal nach einem Update (nicht bei Neuinstallation, nicht über anderen Dialogen)
     var whatsNew by remember { mutableStateOf(eu.kigenc.app.update.WhatsNew.pending(context)) }
-    if (whatsNew.isNotEmpty() && !showOnboarding && !showUpdateDialog) {
+    if (whatsNew.isNotEmpty() && !showConsent && !showOnboarding && !showUpdateDialog) {
         eu.kigenc.app.ui.settings.WhatsNewDialog(whatsNew) {
             eu.kigenc.app.update.WhatsNew.markSeen(context)
             whatsNew = emptyList()
         }
     }
-    if (showUpdateDialog) {
+    if (showUpdateDialog && !showConsent) {
         UpdateDialog(
             state = updateState,
             onInstall = { info -> scope.launch { app.updates.downloadAndInstall(info) } },

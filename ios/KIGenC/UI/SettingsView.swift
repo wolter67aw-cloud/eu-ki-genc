@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var testing = false
     @State private var showLog = false
     @State private var showWhatsNew = false
+    @State private var showRevoke = false
     @State private var confirmDelete = false
 
     private var version: String {
@@ -121,6 +122,7 @@ struct SettingsView: View {
                 Section("Hilfe & Daten") {
                     Button { showLog = true } label: { Label("Fehlerprotokoll", systemImage: "ladybug") }
                     Link(destination: URL(string: "https://github.com/wolter67aw-cloud/eu-ki-genc/blob/main/docs/datenschutz.md")!) { Label("Datenschutz", systemImage: "hand.raised") }
+                    Button { showRevoke = true } label: { Label("Zustimmung zur KI-Nutzung widerrufen", systemImage: "lock.shield") }
                     Button { settings.onboardingDone = false } label: { Label("Einführung erneut zeigen (beim nächsten Start)", systemImage: "questionmark.circle") }
                     Button(role: .destructive) { confirmDelete = true } label: { Label("Alle Chats & Ergebnisse löschen", systemImage: "trash") }
                 }
@@ -145,6 +147,12 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showLog) { LogView() }
             .sheet(isPresented: $showWhatsNew) { WhatsNewView(entries: WhatsNew.all()) { showWhatsNew = false } }
+            .confirmationDialog("Zustimmung widerrufen?", isPresented: $showRevoke, titleVisibility: .visible) {
+                Button("Widerrufen", role: .destructive) { settings.aiConsent = false }
+                Button("Abbrechen", role: .cancel) {}
+            } message: {
+                Text("Ohne deine Zustimmung sendet KI-GenC keine Daten mehr an KI-Dienste. Der Datenschutz-Hinweis erscheint sofort erneut; deine gespeicherten Daten bleiben erhalten.")
+            }
         }
     }
 

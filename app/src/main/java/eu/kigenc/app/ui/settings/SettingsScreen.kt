@@ -112,6 +112,29 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     val settings by app.settings.settings.collectAsStateWithLifecycle(initialValue = AppSettings())
     var showMemory by remember { mutableStateOf(false) }
     if (showMemory) MemoryDialog(onDismiss = { showMemory = false })
+    var revokeConsent by remember { mutableStateOf(false) }
+    if (revokeConsent) {
+        AlertDialog(
+            onDismissRequest = { revokeConsent = false },
+            title = { Text("Zustimmung widerrufen?") },
+            text = {
+                Text(
+                    "Ohne deine Zustimmung sendet KI-GenC keine Daten mehr an KI-Dienste. Die App wird geschlossen; " +
+                        "beim nächsten Start wirst du erneut gefragt. Deine gespeicherten Daten bleiben erhalten."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    revokeConsent = false
+                    eu.kigenc.app.ui.AiConsent.set(context, false)
+                    var c: android.content.Context? = context
+                    while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+                    (c as? android.app.Activity)?.finish()
+                }) { Text("Widerrufen") }
+            },
+            dismissButton = { TextButton(onClick = { revokeConsent = false }) { Text("Abbrechen") } },
+        )
+    }
     val updateState by app.updates.state.collectAsStateWithLifecycle()
 
     var keyInput by remember { mutableStateOf("") }
@@ -441,6 +464,15 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                     modifier = Modifier.clickable {
                         uri.openUri("https://github.com/${app.updates.repo.ifBlank { "wolter67aw-cloud/eu-ki-genc" }}/blob/main/docs/datenschutz.md")
                     },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+                )
+            }
+            item {
+                ListItem(
+                    leadingContent = { Icon(Icons.Outlined.Shield, null) },
+                    headlineContent = { Text("Zustimmung zur KI-Nutzung") },
+                    supportingContent = { Text("Erteilt – antippen, um sie zu widerrufen") },
+                    modifier = Modifier.clickable { revokeConsent = true },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
                 )
             }

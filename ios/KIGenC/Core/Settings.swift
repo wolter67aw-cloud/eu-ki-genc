@@ -62,6 +62,8 @@ final class AppSettings: ObservableObject {
     @Published var imageAgentID: String { didSet { d.set(imageAgentID, forKey: "image_agent") } }
     @Published var cachedModels: [String] { didSet { d.set(cachedModels, forKey: "cached_models") } }
     @Published var onboardingDone: Bool { didSet { d.set(onboardingDone, forKey: "onboarding_done") } }
+    /// Zustimmung zur Übertragung an KI-Dienste (Datenschutz-Hinweis vor der ersten Nutzung, widerrufbar).
+    @Published var aiConsent: Bool { didSet { d.set(aiConsent, forKey: "ai_consent") } }
     /// Gewähltes App-Design (Synthesizer-Skin).
     @Published var design: String { didSet { d.set(design, forKey: "design"); Theme.current = AppDesign.byID(design) } }
     /// Beim App-Start die Nr. 1 der Charts (Hörprobe) abspielen.
@@ -94,6 +96,7 @@ final class AppSettings: ObservableObject {
         imageAgentID = d.string(forKey: "image_agent") ?? ""
         cachedModels = d.stringArray(forKey: "cached_models") ?? []
         onboardingDone = d.bool(forKey: "onboarding_done")
+        aiConsent = d.bool(forKey: "ai_consent")
         design = d.string(forKey: "design") ?? "original"
         startMusic = d.bool(forKey: "start_music")
         musicGenre = d.integer(forKey: "music_genre")

@@ -31,7 +31,7 @@ struct RootView: View {
             nav.largeTitleTextAttributes = [.foregroundColor: UIColor(Theme.text)]
             UINavigationBar.appearance().standardAppearance = nav
             UINavigationBar.appearance().scrollEdgeAppearance = nav
-            if !settings.onboardingDone { showOnboarding = true }
+            if settings.aiConsent && !settings.onboardingDone { showOnboarding = true }
             // „Was ist neu“ einmal nach einem Update – nicht bei einer Neuinstallation
             whatsNew = WhatsNew.pending(freshInstall: !settings.onboardingDone)
             refreshModelsIfNeeded()
@@ -40,11 +40,21 @@ struct RootView: View {
         }
         // Leiste „Nr. 1 der Charts“ über der Tab-Leiste, solange die Hörprobe läuft
         .overlay(alignment: .bottom) { NowPlayingBar().padding(.bottom, 56) }
+        // Datenschutz-Hinweis: einmal zustimmen, bevor Daten an KI-Dienste gehen (auch für bisherige Nutzer)
+        .fullScreenCover(isPresented: Binding(get: { !settings.aiConsent }, set: { _ in })) {
+            ConsentView {
+                settings.aiConsent = true
+                if !settings.onboardingDone {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { showOnboarding = true }
+                }
+            }
+            .interactiveDismissDisabled()
+        }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView { settings.onboardingDone = true; showOnboarding = false; if !settings.hasKey { tab = 4 } }
                 .interactiveDismissDisabled()
         }
-        .sheet(isPresented: Binding(get: { !whatsNew.isEmpty && !showOnboarding },
+        .sheet(isPresented: Binding(get: { !whatsNew.isEmpty && !showOnboarding && settings.aiConsent },
                                     set: { if !$0 { WhatsNew.markSeen(); whatsNew = [] } })) {
             WhatsNewView(entries: whatsNew) { WhatsNew.markSeen(); whatsNew = [] }
                 .presentationDetents([.medium, .large])
@@ -66,6 +76,46 @@ extension RootView {
             if !models.contains(settings.chatModel) { settings.chatModel = "mistral-small-latest" }
             if !models.contains(settings.codeModel) { settings.codeModel = "codestral-latest" }
         }
+    }
+}
+
+/// Datenschutz-Hinweis mit Zustimmung vor der ersten KI-Nutzung.
+struct ConsentView: View {
+    let accept: () -> Void
+    @State private var declined = false
+
+    static let privacyURL = URL(string: "https://github.com/wolter67aw-cloud/eu-ki-genc/blob/main/docs/datenschutz.md")!
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Image(systemName: "lock.shield").font(.system(size: 44)).foregroundStyle(Theme.cyan)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+                Text("Datenschutz-Hinweis").font(.title.bold())
+                    .frame(maxWidth: .infinity)
+                    .accessibilityAddTraits(.isHeader)
+                Text("KI-GenC arbeitet mit künstlicher Intelligenz externer Anbieter. Wenn du eine KI-Funktion nutzt, werden deine Eingaben – Texte, angehängte Fotos, Videos, Dateien und Sprachaufnahmen – an Mistral AI (Paris, Rechenzentren in der EU) gesendet und dort verarbeitet. Für Bilder kann je nach Einstellung Pollinations.ai oder Black Forest Labs genutzt werden. Im kostenlosen Mistral-Tarif können Anfragen zum Training der KI-Modelle verwendet werden.")
+                Text("Unterhaltungen, Bilder und Einstellungen bleiben auf deinem Gerät. Es gibt keine Werbung und kein Tracking.")
+                Text("Bitte gib keine sensiblen Daten wie Passwörter oder Gesundheitsdaten ein. Deine Zustimmung kannst du jederzeit unter Optionen widerrufen.")
+                    .foregroundStyle(Theme.secondaryText)
+                Link(destination: Self.privacyURL) {
+                    Label("Datenschutzerklärung lesen", systemImage: "arrow.up.right.square")
+                }
+                .foregroundStyle(Theme.cyan)
+                if declined {
+                    Text("Ohne deine Zustimmung kann KI-GenC keine Anfragen an die KI senden. Du kannst jederzeit später zustimmen.")
+                        .font(.callout).foregroundStyle(.orange)
+                }
+                GradientButton(title: "Zustimmen", icon: "checkmark", action: accept)
+                Button("Ablehnen") { declined = true }
+                    .frame(maxWidth: .infinity)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            .padding(24)
+        }
+        .background(Theme.backgroundGradient.ignoresSafeArea())
+        .preferredColorScheme(Theme.current.dark ? .dark : .light)
     }
 }
 
