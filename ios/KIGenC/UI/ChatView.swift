@@ -28,8 +28,51 @@ final class ChatModel: ObservableObject {
         guard (!text.isEmpty || !attachments.isEmpty), !busy, settings.hasKey else { return }
         let (extra, images) = AttachmentLoader.prompt(for: attachments)
         let shown = text.isEmpty ? "Bitte analysiere den Anhang." : text
-        conversation.messages.append(ChatMessage(role: "user", text: shown + (extra.isEmpty ? "" : "\n\n📎 " + attachments.map(\.name).joined(separator: ", ")), images: images))
-        if conversation.messages.count == 1 { conversation.title = String(shown.prefix(50)) }
+        let display = shown + (extra.isEmpty ? "" : "\n\n📎 " + attachments.map(\.name).joined(separator: ", "))
+        input = ""
+        attachments = []
+        ask(display: display, question: shown, extra: extra, images: images, learnText: text, setTitle: true, settings: settings)
+    }
+
+    /// Letzte Antwort neu erzeugen (auch nach einem Fehler): ab der letzten eigenen Nachricht erneut fragen.
+    func regenerate(settings: AppSettings) {
+        guard !busy, settings.hasKey, let idx = conversation.messages.lastIndex(where: { $0.role == "user" }) else { return }
+        let user = conversation.messages[idx]
+        conversation.messages.removeSubrange(idx...)
+        if user.text.contains(Self.clip) { notice = "Hinweis: Dateiinhalte werden nicht erneut mitgeschickt – bei Bedarf neu anhängen." }
+        // Gedächtnis wurde bei der ersten Antwort schon gepflegt → nicht doppelt lernen.
+        ask(display: user.text, question: user.text, extra: "", images: user.images, learnText: "", setTitle: false, settings: settings)
+    }
+
+    /// Eigene Nachricht bearbeiten und ab dort neu senden (spätere Nachrichten entfallen, Fotos bleiben).
+    func editAndResend(id: UUID, newText: String, settings: AppSettings) {
+        let body = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !busy, settings.hasKey, !body.isEmpty, let idx = conversation.messages.firstIndex(where: { $0.id == id }) else { return }
+        let original = conversation.messages[idx]
+        let suffix = Self.attachmentSuffix(of: original.text)
+        conversation.messages.removeSubrange(idx...)
+        if !suffix.isEmpty { notice = "Hinweis: Dateiinhalte werden nicht erneut mitgeschickt – bei Bedarf neu anhängen." }
+        ask(display: body + suffix, question: body + suffix, extra: "", images: original.images, learnText: body, setTitle: idx == 0, settings: settings)
+    }
+
+    private static let clip = "\n\n📎 "
+
+    /// Eigentlicher Text einer Nachricht ohne die Zeile „📎 Anhänge“.
+    static func editableText(of text: String) -> String {
+        guard let r = text.range(of: clip, options: .backwards) else { return text }
+        return String(text[..<r.lowerBound])
+    }
+
+    /// Angehängte Zeile „📎 Anhänge“ (oder leer).
+    static func attachmentSuffix(of text: String) -> String {
+        guard let r = text.range(of: clip, options: .backwards) else { return "" }
+        return String(text[r.lowerBound...])
+    }
+
+    /// Frage stellen: eigene Nachricht anzeigen, Antwort holen (Chat, Websuche oder Code), Verlauf speichern.
+    private func ask(display: String, question shown: String, extra: String, images: [String], learnText text: String, setTitle: Bool, settings: AppSettings) {
+        conversation.messages.append(ChatMessage(role: "user", text: display, images: images))
+        if setTitle && conversation.messages.count == 1 { conversation.title = String(Self.editableText(of: shown).prefix(50)) }
         let projectText = ProjectStore.shared.byID(conversation.projectID)?.systemText() ?? ""
         let memoryText = settings.memoryEnabled ? MemoryStore.shared.systemText : ""
         let style = AppSettings.styleText(settings.answerStyle)
@@ -37,8 +80,6 @@ final class ChatModel: ObservableObject {
         let history = conversation.messages.dropLast().suffix(20)
         for m in history where !m.isError { apiMessages.append(ApiMessage(role: m.role, text: m.text, images: m.role == "user" ? m.images : [])) }
         apiMessages.append(ApiMessage(role: "user", text: shown + extra, images: images))
-        input = ""
-        attachments = []
         conversation.messages.append(ChatMessage(role: "assistant", text: ""))
         let index = conversation.messages.count - 1
         busy = true
@@ -78,7 +119,7 @@ final class ChatModel: ObservableObject {
                 }
                 if conversation.messages[index].text.isEmpty { conversation.messages[index].text = "(keine Antwort)" }
                 if settings.autoSpeak { Speaker.shared.speak(conversation.messages[index].text) }
-                if settings.memoryEnabled { learn(text, key: settings.key, auto: settings.memoryAuto) }
+                if settings.memoryEnabled && !text.isEmpty { learn(text, key: settings.key, auto: settings.memoryAuto) }
             } catch {
                 ErrorLog.report(error, context: "Chat")
                 conversation.messages[index].text = "⚠️ " + friendly(error)
@@ -174,6 +215,9 @@ struct ChatView: View {
     @State private var jumpTo: UUID?
     @State private var flashID: UUID?
     @State private var showAttach = false
+    /// Eigene Nachricht, die gerade bearbeitet wird (Blatt „Nachricht bearbeiten“).
+    @State private var editing: ChatMessage?
+    @State private var editText = ""
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -224,6 +268,7 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showHistory) { history }
+            .sheet(item: $editing) { m in editSheet(m) }
             .sheet(isPresented: $showProjects) {
                 ProjectsView { p in model.selectProject(p); showProjects = false }
                     .environmentObject(settings)
@@ -308,7 +353,13 @@ struct ChatView: View {
             ScrollView {
                 LazyVStack(spacing: 12) {
                     ForEach(model.conversation.messages) { m in
-                        MessageRow(message: m, busy: model.busy && m.id == model.conversation.messages.last?.id)
+                        let isLast = m.id == model.conversation.messages.last?.id
+                        MessageRow(
+                            message: m,
+                            busy: model.busy && isLast,
+                            onRegenerate: !model.busy && isLast && m.role == "assistant" ? { model.regenerate(settings: settings) } : nil,
+                            onEdit: !model.busy && m.role == "user" ? { editing = m; editText = ChatModel.editableText(of: m.text) } : nil
+                        )
                             .background(flashID == m.id ? Theme.cyan.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 18))
                             .animation(.easeInOut(duration: 0.5), value: flashID)
                             .id(m.id)
@@ -410,6 +461,38 @@ struct ChatView: View {
         .padding(.horizontal).padding(.vertical, 10)
         .background(Theme.navy.opacity(0.9))
         .disabled(!settings.hasKey)
+    }
+
+    /// Eigene Nachricht bearbeiten und ab dort neu senden (wie Android).
+    private func editSheet(_ m: ChatMessage) -> some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 10) {
+                TextEditor(text: $editText)
+                    .scrollContentBackground(.hidden)
+                    .padding(8)
+                    .background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 14))
+                    .accessibilityLabel("Text der Nachricht")
+                Text("Die KI antwortet neu; spätere Nachrichten dieser Unterhaltung werden ersetzt.")
+                    .font(.caption).foregroundStyle(Theme.secondaryText)
+            }
+            .padding()
+            .background(Theme.backgroundGradient.ignoresSafeArea())
+            .navigationTitle("Nachricht bearbeiten")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { editing = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Senden") {
+                        model.editAndResend(id: m.id, newText: editText, settings: settings)
+                        editing = nil
+                    }
+                    .disabled(editText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     /// Aktiver Modus über dem Eingabefeld – Antippen schaltet ihn aus.
@@ -581,38 +664,65 @@ struct HistoryGroup: Identifiable {
 struct MessageRow: View {
     let message: ChatMessage
     var busy = false
+    /// „Neu erzeugen“ – nur bei der letzten Antwort, wenn nichts läuft.
+    var onRegenerate: (() -> Void)? = nil
+    /// „Bearbeiten“ – nur bei eigenen Nachrichten, wenn nichts läuft.
+    var onEdit: (() -> Void)? = nil
 
     var body: some View {
-        HStack {
-            if message.role == "user" { Spacer(minLength: 40) }
-            VStack(alignment: .leading, spacing: 8) {
-                if !message.images.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack {
-                            ForEach(Array(message.images.enumerated()), id: \.offset) { _, url in
-                                if let img = Self.image(from: url) {
-                                    Image(uiImage: img).resizable().scaledToFill().frame(width: 90, height: 90).clipShape(RoundedRectangle(cornerRadius: 10))
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack {
+                if message.role == "user" { Spacer(minLength: 40) }
+                VStack(alignment: .leading, spacing: 8) {
+                    if !message.images.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack {
+                                ForEach(Array(message.images.enumerated()), id: \.offset) { _, url in
+                                    if let img = Self.image(from: url) {
+                                        Image(uiImage: img).resizable().scaledToFill().frame(width: 90, height: 90).clipShape(RoundedRectangle(cornerRadius: 10))
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                if message.role == "assistant" {
-                    if message.text.isEmpty && busy {
-                        HStack(spacing: 8) { ProgressView(); Text("denkt nach …").foregroundStyle(Theme.secondaryText) }
-                    } else if message.isError {
-                        ErrorCard(message: message.text)
+                    if message.role == "assistant" {
+                        if message.text.isEmpty && busy {
+                            HStack(spacing: 8) { ProgressView(); Text("denkt nach …").foregroundStyle(Theme.secondaryText) }
+                        } else if message.isError {
+                            ErrorCard(message: message.text)
+                            if let onRegenerate {
+                                Button(action: onRegenerate) { Label("Erneut versuchen", systemImage: "arrow.clockwise") }
+                                    .font(.callout).foregroundStyle(Theme.cyan)
+                            }
+                        } else {
+                            MarkdownView(text: message.text)
+                            if !busy {
+                                HStack(spacing: 18) {
+                                    ResultActions(text: message.text, kind: "Chat")
+                                    if let onRegenerate {
+                                        Button(action: onRegenerate) { Image(systemName: "arrow.clockwise") }
+                                            .font(.callout).foregroundStyle(Theme.cyan)
+                                            .accessibilityLabel("Antwort neu erzeugen")
+                                    }
+                                }
+                            }
+                        }
                     } else {
-                        MarkdownView(text: message.text)
-                        if !busy { ResultActions(text: message.text, kind: "Chat") }
+                        Text(message.text).textSelection(.enabled)
                     }
-                } else {
-                    Text(message.text).textSelection(.enabled)
+                }
+                .padding(12)
+                .background(message.role == "user" ? Theme.userBubble : Theme.card, in: RoundedRectangle(cornerRadius: 16))
+                if message.role == "assistant" { Spacer(minLength: 0) }
+            }
+            if message.role == "user", let onEdit {
+                HStack {
+                    Spacer()
+                    Button(action: onEdit) { Label("Bearbeiten", systemImage: "pencil") }
+                        .font(.caption).foregroundStyle(Theme.cyan)
+                        .accessibilityLabel("Eigene Nachricht bearbeiten und neu senden")
                 }
             }
-            .padding(12)
-            .background(message.role == "user" ? Theme.userBubble : Theme.card, in: RoundedRectangle(cornerRadius: 16))
-            if message.role == "assistant" { Spacer(minLength: 0) }
         }
     }
 
