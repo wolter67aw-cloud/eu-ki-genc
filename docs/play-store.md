@@ -56,6 +56,8 @@ KI-GenC ist ein unabhängiges Angebot und steht in keiner Verbindung zu Mistral 
 - Vorstellungsgrafik 1024 × 500: `docs/play-store/vorstellungsgrafik-1024x500.png`
 - 6 Screenshots 1080 × 1920: `docs/play-store/screenshot-*.png` (Nachbauten der echten Ansichten,
   neu erzeugen mit `python3 scripts/play_store_grafiken.py`)
+- 6 Screenshots für Foldables (aufgeklappt) 1840 × 2208: `docs/play-store/foldable-*.png`
+  (`python3 scripts/play_store_foldable.py`)
 
 ## Checkliste
 1. ✅ Datenschutzerklärung mit Name, Anschrift und E-Mail
