@@ -82,6 +82,8 @@ fun MainScreen(
     onSharedConsumed: () -> Unit,
     openUpdate: Boolean,
     onOpenUpdateHandled: () -> Unit,
+    quick: eu.kigenc.app.widget.QuickAction? = null,
+    onQuickHandled: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val app = context.app
@@ -92,6 +94,9 @@ fun MainScreen(
     var tab by rememberSaveable { mutableStateOf(Tab.START) }
     // Werkzeug, das von der Startseite aus geöffnet werden soll
     var toolRequest by remember { mutableStateOf<eu.kigenc.app.ui.tools.Tool?>(null) }
+    // Schnellerfassung (Widget): neue Idee dieser Art bzw. Fokus auf „Neue Aufgabe“
+    var ideaRequest by remember { mutableStateOf<eu.kigenc.app.data.IdeaKind?>(null) }
+    var focusNewTask by remember { mutableStateOf(false) }
     val stateHolder = rememberSaveableStateHolder()
 
     val chatVm: ChatViewModel = viewModel(key = "chat_$sessionId") { ChatViewModel(app, ChatMode.CHAT) }
@@ -128,6 +133,33 @@ fun MainScreen(
 
     LaunchedEffect(shared) {
         if (shared != null) tab = Tab.CHAT
+    }
+
+    // Startbildschirm-Widget „Schnellerfassung“: direkt an die passende Stelle springen
+    LaunchedEffect(quick) {
+        when (quick ?: return@LaunchedEffect) {
+            eu.kigenc.app.widget.QuickAction.CHAT -> {
+                // Laufende Antwort nicht abbrechen; sonst mit leerer Unterhaltung beginnen
+                if (!chatVm.state.value.streaming) chatVm.newChat()
+                tab = Tab.CHAT
+            }
+            eu.kigenc.app.widget.QuickAction.NOTE -> {
+                ideaRequest = eu.kigenc.app.data.IdeaKind.NOTE
+                toolRequest = eu.kigenc.app.ui.tools.Tool.IDEAS
+                tab = Tab.TOOLS
+            }
+            eu.kigenc.app.widget.QuickAction.MEMO -> {
+                ideaRequest = eu.kigenc.app.data.IdeaKind.MEMO
+                toolRequest = eu.kigenc.app.ui.tools.Tool.IDEAS
+                tab = Tab.TOOLS
+            }
+            eu.kigenc.app.widget.QuickAction.TASK -> {
+                focusNewTask = true
+                toolRequest = eu.kigenc.app.ui.tools.Tool.TASKS
+                tab = Tab.TOOLS
+            }
+        }
+        onQuickHandled()
     }
 
     LaunchedEffect(openUpdate) {
@@ -176,6 +208,10 @@ fun MainScreen(
                     request = toolRequest,
                     onRequestHandled = { toolRequest = null },
                     onOpenCode = { tab = Tab.CODE },
+                    ideaRequest = ideaRequest,
+                    onIdeaRequestHandled = { ideaRequest = null },
+                    focusNewTask = focusNewTask,
+                    onFocusNewTaskHandled = { focusNewTask = false },
                 )
                 Tab.CODE -> {
                     BackHandler { tab = Tab.TOOLS }

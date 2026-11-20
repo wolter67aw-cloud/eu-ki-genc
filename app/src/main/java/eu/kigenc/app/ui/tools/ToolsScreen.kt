@@ -65,6 +65,10 @@ fun ToolsScreen(
     request: Tool? = null,
     onRequestHandled: () -> Unit = {},
     onOpenCode: () -> Unit = {},
+    ideaRequest: eu.kigenc.app.data.IdeaKind? = null,
+    onIdeaRequestHandled: () -> Unit = {},
+    focusNewTask: Boolean = false,
+    onFocusNewTaskHandled: () -> Unit = {},
 ) {
     var current by rememberSaveable { mutableStateOf<Tool?>(null) }
     androidx.compose.runtime.LaunchedEffect(request) {
@@ -93,6 +97,13 @@ fun ToolsScreen(
         Tool.IDEAS -> {
             val vm: IdeasViewModel = viewModel(key = "tool_ideas_$session") { IdeasViewModel(app) }
             androidx.compose.runtime.LaunchedEffect(Unit) { vm.refresh() }
+            // Schnellerfassung (Widget): gleich eine neue Notiz bzw. ein neues Sprachmemo beginnen
+            androidx.compose.runtime.LaunchedEffect(ideaRequest) {
+                val kind = ideaRequest ?: return@LaunchedEffect
+                vm.back()
+                vm.open(IdeaScreen.Edit(kind))
+                onIdeaRequestHandled()
+            }
             IdeasScreen(vm, back, modifier)
         }
         Tool.PHOTO -> PhotoEditorScreen(viewModel(key = "tool_photo_$session") { PhotoEditorViewModel(app) }, back, modifier)
@@ -100,7 +111,10 @@ fun ToolsScreen(
         Tool.VIDEO_CREATE -> SlideshowScreen(viewModel(key = "tool_slideshow_$session") { SlideshowViewModel(app) }, back, modifier)
         Tool.TRANSCRIBE -> TranscribeScreen(viewModel(key = "tool_transcribe_$session") { TranscribeViewModel(app) }, back, modifier)
         Tool.DATA -> DataScreen(viewModel(key = "tool_data_$session") { DataViewModel(app) }, back, modifier)
-        Tool.TASKS -> TasksScreen(viewModel(key = "tool_tasks_$session") { TasksViewModel(app) }, back, modifier)
+        Tool.TASKS -> TasksScreen(
+            viewModel(key = "tool_tasks_$session") { TasksViewModel(app) }, back, modifier,
+            focusNew = focusNewTask, onFocusHandled = onFocusNewTaskHandled,
+        )
         Tool.RESEARCH -> ResearchScreen(viewModel(key = "tool_research_$session") { ResearchViewModel(app) }, back, modifier)
         Tool.RESULTS -> {
             val vm: ResultsViewModel = viewModel(key = "tool_results_$session") { ResultsViewModel(app) }

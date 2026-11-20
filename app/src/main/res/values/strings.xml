@@ -3,4 +3,10 @@
     <string name="app_name">KI-GenC</string>
     <string name="channel_updates">App-Updates</string>
     <string name="channel_updates_desc">Benachrichtigt, wenn eine neue Version von KI-GenC bereitsteht.</string>
+    <string name="widget_quick_label">KI-GenC Schnellerfassung</string>
+    <string name="widget_quick_desc">Mit einem Tipp fragen, eine Notiz oder ein Sprachmemo festhalten oder eine Aufgabe anlegen.</string>
+    <string name="widget_chat">Fragen</string>
+    <string name="widget_note">Notiz</string>
+    <string name="widget_memo">Sprachmemo</string>
+    <string name="widget_task">Aufgabe</string>
 </resources>

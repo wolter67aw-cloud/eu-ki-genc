@@ -20,11 +20,15 @@ import eu.kigenc.app.ui.MainScreen
 import eu.kigenc.app.ui.chat.SharedContent
 import eu.kigenc.app.ui.theme.AppBackground
 import eu.kigenc.app.ui.theme.KiTheme
+import eu.kigenc.app.widget.QuickAction
+import eu.kigenc.app.widget.QuickCaptureWidget
 
 class HomeActivity : ComponentActivity() {
 
     private var shared by mutableStateOf<SharedContent?>(null)
     private var openUpdate by mutableStateOf(false)
+    /** Schnellerfassung aus dem Startbildschirm-Widget (wird nach dem Öffnen zurückgesetzt). */
+    private var quick by mutableStateOf<QuickAction?>(null)
 
     /** Ändert sich, wenn die App neu geöffnet wird → alle Eingaben werden geleert. */
     private var sessionId by mutableIntStateOf(0)
@@ -70,6 +74,8 @@ class HomeActivity : ComponentActivity() {
                         onSharedConsumed = { shared = null },
                         openUpdate = openUpdate,
                         onOpenUpdateHandled = { openUpdate = false },
+                        quick = quick,
+                        onQuickHandled = { quick = null },
                     )
                     }
                 }
@@ -131,6 +137,10 @@ class HomeActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         if (intent == null) return
         if (intent.getBooleanExtra(EXTRA_OPEN_UPDATE, false)) openUpdate = true
+        // Widget-Schnellerfassung – nicht erneut auslösen, wenn die App später aus „Zuletzt verwendet“ geöffnet wird
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) {
+            QuickAction.from(intent.getStringExtra(QuickCaptureWidget.EXTRA_QUICK))?.let { quick = it }
+        }
         if (intent.action == Intent.ACTION_SEND) {
             val text = intent.getStringExtra(Intent.EXTRA_TEXT)
             val uri = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)

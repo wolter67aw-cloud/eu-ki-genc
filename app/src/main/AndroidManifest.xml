@@ -145,6 +145,19 @@
         </activity-alias>
 
 
+        <!-- Startbildschirm-Widget „KI-GenC Schnellerfassung“ -->
+        <receiver
+            android:name=".widget.QuickCaptureWidget"
+            android:exported="true"
+            android:label="@string/widget_quick_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_quick_info" />
+        </receiver>
+
         <receiver
             android:name=".update.InstallReceiver"
             android:exported="false" />

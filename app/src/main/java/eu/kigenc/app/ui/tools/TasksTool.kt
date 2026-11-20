@@ -40,12 +40,16 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -65,6 +69,7 @@ import eu.kigenc.app.HomeActivity
 import eu.kigenc.app.R
 import eu.kigenc.app.ai.ApiMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -272,7 +277,13 @@ private fun pickDateTime(context: Context, onPicked: (Long) -> Unit) {
 }
 
 @Composable
-fun TasksScreen(vm: TasksViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun TasksScreen(
+    vm: TasksViewModel,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusNew: Boolean = false,
+    onFocusHandled: () -> Unit = {},
+) {
     val context = LocalContext.current
     val tasks by vm.tasks.collectAsStateWithLifecycle()
     val output by vm.output.collectAsStateWithLifecycle()
@@ -282,6 +293,15 @@ fun TasksScreen(vm: TasksViewModel, onBack: () -> Unit, modifier: Modifier = Mod
     var title by rememberSaveable { mutableStateOf("") }
     var due by rememberSaveable { mutableStateOf<Long?>(null) }
     val fmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+    // Schnellerfassung (Widget): Cursor gleich ins Feld „Neue Aufgabe“
+    val newTaskFocus = remember { FocusRequester() }
+    LaunchedEffect(focusNew) {
+        if (focusNew) {
+            delay(350)
+            runCatching { newTaskFocus.requestFocus() }
+            onFocusHandled()
+        }
+    }
 
     ToolScaffold("Aufgaben & Termine", onBack, modifier, message, vm::clearMessage) { inner ->
         LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
@@ -312,7 +332,7 @@ fun TasksScreen(vm: TasksViewModel, onBack: () -> Unit, modifier: Modifier = Mod
                     OutlinedTextField(
                         value = title, onValueChange = { title = it },
                         placeholder = { Text("Neue Aufgabe") }, singleLine = true,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f).focusRequester(newTaskFocus)
                     )
                     IconButton(onClick = { pickDateTime(context) { due = it } }) {
                         Icon(Icons.Outlined.Event, if (due == null) "Termin wählen" else "Termin ändern",
