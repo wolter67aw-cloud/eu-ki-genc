@@ -59,23 +59,36 @@ enum Beta {
 
     static var hasSharedKey: Bool { isBeta && !BetaHashes.keyBlobs.isEmpty }
 
-    /// Entschlüsselt den Test-Schlüssel mit dem Zugangscode. Ohne gültigen Code nicht lesbar.
+    /// Gemeinsamer Black-Forest-Labs-Schlüssel der Testversion (nur im Arbeitsspeicher).
+    static var sharedBflKey: String?
+
+    static var hasSharedBflKey: Bool { isBeta && !BetaBflBlobs.value.isEmpty }
+
+    /// Entschlüsselt die Test-Schlüssel (Mistral und – falls hinterlegt – Black Forest Labs) mit dem Zugangscode.
+    /// Ohne gültigen Code nicht lesbar. Liefert den Mistral-Schlüssel.
     static func unlockSharedKey(_ code: String) -> String? {
+        if hasSharedBflKey && sharedBflKey == nil {
+            sharedBflKey = decrypt(code, salt: "kigenc-beta-bfl-v1", blobs: BetaBflBlobs.value)
+        }
         if let sharedKey { return sharedKey }
         guard hasSharedKey else { return nil }
+        sharedKey = decrypt(code, salt: "kigenc-beta-key-v1", blobs: BetaHashes.keyBlobs)
+        return sharedKey
+    }
+
+    private static func decrypt(_ code: String, salt saltText: String, blobs: String) -> String? {
         let password = Array(normalize(code).utf8).map { Int8(bitPattern: $0) }
-        let salt = Array("kigenc-beta-key-v1".utf8)
+        let salt = Array(saltText.utf8)
         var derived = [UInt8](repeating: 0, count: 32)
         let status = CCKeyDerivationPBKDF(CCPBKDFAlgorithm(kCCPBKDF2), password, password.count, salt, salt.count,
                                           CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256), 120_000, &derived, derived.count)
         guard status == kCCSuccess else { return nil }
         let key = SymmetricKey(data: Data(derived))
-        for blob in BetaHashes.keyBlobs.split(separator: ",") {
+        for blob in blobs.split(separator: ",") {
             guard let raw = Data(base64Encoded: String(blob)),
                   let box = try? AES.GCM.SealedBox(combined: raw),
                   let plain = try? AES.GCM.open(box, using: key),
                   let text = String(data: plain, encoding: .utf8) else { continue }
-            sharedKey = text
             return text
         }
         return nil

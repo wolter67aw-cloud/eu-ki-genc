@@ -84,7 +84,14 @@ final class AppSettings: ObservableObject {
         return own.isEmpty ? (Beta.sharedKey ?? "") : own
     }
     var usesTestKey: Bool { apiKey.trimmingCharacters(in: .whitespaces).isEmpty && Beta.sharedKey != nil }
-    var canEditFaithfully: Bool { !bflKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// Eigener Black-Forest-Labs-Schlüssel, sonst der Test-Schlüssel der Testversion.
+    var effectiveBflKey: String {
+        let own = bflKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return own.isEmpty ? (Beta.sharedBflKey ?? "") : own
+    }
+    var hasOwnBflKey: Bool { !bflKey.trimmingCharacters(in: .whitespaces).isEmpty }
+    var usesTestBflKey: Bool { !hasOwnBflKey && Beta.sharedBflKey != nil }
+    var canEditFaithfully: Bool { !effectiveBflKey.isEmpty }
 
     private init() {
         apiKey = Keychain.get("mistral_key")

@@ -86,14 +86,31 @@ object Beta {
 
     val hasSharedKey: Boolean get() = isBeta && BuildConfig.BETA_KEY_BLOBS.isNotBlank()
 
-    /** Entschlüsselt den Test-Schlüssel mit dem Zugangscode (PBKDF2 + AES-GCM). Ohne gültigen Code nicht lesbar. */
+    /** Gemeinsamer Black-Forest-Labs-Schlüssel der Testversion (Bilder/gesichtstreue Bearbeitung), nur im Arbeitsspeicher. */
+    val sharedBflKey = MutableStateFlow<String?>(null)
+
+    val hasSharedBflKey: Boolean get() = isBeta && BuildConfig.BETA_BFL_BLOBS.isNotBlank()
+
+    /**
+     * Entschlüsselt die Test-Schlüssel (Mistral und – falls hinterlegt – Black Forest Labs) mit dem Zugangscode
+     * (PBKDF2 + AES-GCM). Ohne gültigen Code nicht lesbar. Liefert den Mistral-Schlüssel.
+     */
     suspend fun unlockSharedKey(code: String): String? = withContext(Dispatchers.Default) {
+        if (hasSharedBflKey && sharedBflKey.value == null) {
+            sharedBflKey.value = decrypt(code, "kigenc-beta-bfl-v1", BuildConfig.BETA_BFL_BLOBS)
+        }
         if (!hasSharedKey) return@withContext null
         sharedKey.value?.let { return@withContext it }
-        val spec = PBEKeySpec(normalize(code).toCharArray(), "kigenc-beta-key-v1".toByteArray(), 120_000, 256)
+        val key = decrypt(code, "kigenc-beta-key-v1", BuildConfig.BETA_KEY_BLOBS)
+        sharedKey.value = key
+        key
+    }
+
+    private fun decrypt(code: String, salt: String, blobs: String): String? {
+        val spec = PBEKeySpec(normalize(code).toCharArray(), salt.toByteArray(), 120_000, 256)
         val keyBytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
         val aes = SecretKeySpec(keyBytes, "AES")
-        val key = BuildConfig.BETA_KEY_BLOBS.split(',').firstNotNullOfOrNull { blob ->
+        return blobs.split(',').firstNotNullOfOrNull { blob ->
             runCatching {
                 val raw = Base64.decode(blob.trim(), Base64.DEFAULT)
                 val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -101,8 +118,6 @@ object Beta {
                 String(cipher.doFinal(raw, 12, raw.size - 12))
             }.getOrNull()
         }
-        sharedKey.value = key
-        key
     }
 }
 
@@ -125,7 +140,7 @@ fun BetaGate(content: @Composable () -> Unit) {
         else -> {
             // Test-Schlüssel freischalten, damit Tester keinen eigenen Mistral-Schlüssel brauchen
             val shared by Beta.sharedKey.collectAsState()
-            var tried by remember { mutableStateOf(!Beta.hasSharedKey) }
+            var tried by remember { mutableStateOf(!Beta.hasSharedKey && !Beta.hasSharedBflKey) }
             LaunchedEffect(unlocked) {
                 Beta.storedCode(context)?.let { Beta.unlockSharedKey(it) }
                 tried = true

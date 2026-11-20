@@ -271,7 +271,7 @@ struct PhotoEditorView: View {
                 step = "Bearbeite gesichtstreu …"
                 let instruction = others.isEmpty ? aiPrompt
                     : "\(aiPrompt.isEmpty ? "Combine the people and elements of all images naturally into one photo" : aiPrompt). Image 1 is the main photo; the other images are references (people, objects, style)."
-                aiImage = UIImage(data: try await ImageService.editFaithfully(key: settings.bflKey, instruction: instruction, images: [source] + others))
+                aiImage = UIImage(data: try await ImageService.editFaithfully(key: settings.effectiveBflKey, instruction: instruction, images: [source] + others))
             } else {
                 guard settings.hasKey else { throw APIError(code: 401, message: "Bitte den Mistral-Schlüssel in den Optionen eintragen.") }
                 step = "Analysiere Foto …"

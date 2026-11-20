@@ -24,14 +24,14 @@ enum ImageService {
             return (try await pollinations(prompt: prompt, width: w, height: h), "Pollinations")
         case .bfl:
             guard settings.canEditFaithfully else { throw APIError(code: 0, message: "Bitte zuerst den Black-Forest-Labs-Schlüssel in den Optionen eintragen.") }
-            return (try await bflGenerate(key: settings.bflKey, prompt: prompt, width: w, height: h), "Black Forest Labs")
+            return (try await bflGenerate(key: settings.effectiveBflKey, prompt: prompt, width: w, height: h), "Black Forest Labs")
         case .mistral:
             return (try await mistral(prompt: prompt, settings: settings), "Mistral AI")
         case .auto:
             do {
                 return (try await mistral(prompt: prompt, settings: settings), "Mistral AI")
             } catch {
-                if settings.canEditFaithfully, let d = try? await bflGenerate(key: settings.bflKey, prompt: prompt, width: w, height: h) {
+                if settings.canEditFaithfully, let d = try? await bflGenerate(key: settings.effectiveBflKey, prompt: prompt, width: w, height: h) {
                     return (d, "Black Forest Labs")
                 }
                 return (try await pollinations(prompt: prompt, width: w, height: h), "Pollinations (Mistral nicht verfügbar)")

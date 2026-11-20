@@ -97,12 +97,16 @@ struct SettingsView: View {
                 Section {
                     Picker("Bildgenerator", selection: $settings.imageProvider) { ForEach(ImageProvider.allCases) { Text($0.title).tag($0) } }
                     Text(settings.imageProvider.detail).font(.caption).foregroundStyle(Theme.secondaryText)
-                    SecureField(settings.canEditFaithfully ? "•••••••• (gespeichert)" : "Black-Forest-Labs-Schlüssel (optional)", text: $bflInput)
+                    if settings.usesTestBflKey {
+                        Text("✓ Test-Schlüssel aktiv – in der Testversion ist bereits ein Black-Forest-Labs-Schlüssel hinterlegt. Du musst nichts eintragen.")
+                            .font(.caption).foregroundStyle(Theme.cyan)
+                    }
+                    SecureField(settings.hasOwnBflKey ? "•••••••• (gespeichert)" : "Black-Forest-Labs-Schlüssel (optional)", text: $bflInput)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                     HStack {
                         Button("Speichern") { settings.bflKey = bflInput; bflInput = "" }.disabled(bflInput.isEmpty)
                         Spacer()
-                        if settings.canEditFaithfully { Button("Entfernen", role: .destructive) { settings.bflKey = "" } }
+                        if settings.hasOwnBflKey { Button("Entfernen", role: .destructive) { settings.bflKey = "" } }
                     }
                     Link("Schlüssel holen (dashboard.bfl.ai)", destination: URL(string: "https://dashboard.bfl.ai")!).font(.callout)
                 } header: { Text("Bilder") } footer: { Text("Mit Black-Forest-Labs-Schlüssel werden Fotos gesichtstreu bearbeitet (FLUX Kontext).") }

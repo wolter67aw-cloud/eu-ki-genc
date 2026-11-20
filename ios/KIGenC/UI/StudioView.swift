@@ -221,7 +221,7 @@ struct ImageStudio: View {
             if !refImages.isEmpty && settings.canEditFaithfully {
                 step = "Bearbeite gesichtstreu mit FLUX Kontext …"
                 let instruction = (userPrompt.isEmpty ? "Improve the image" : userPrompt) + ", style: \(style)"
-                let data = try await ImageService.editFaithfully(key: settings.bflKey, instruction: instruction, images: refImages)
+                let data = try await ImageService.editFaithfully(key: settings.effectiveBflKey, instruction: instruction, images: refImages)
                 image = UIImage(data: data)
                 info = "Black Forest Labs · FLUX Kontext (gesichtstreu)"
                 return

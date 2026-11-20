@@ -590,7 +590,8 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     }
 
     if (showImageProvider) {
-        var bflInput by remember { mutableStateOf(settings.bflKey) }
+        // Nur den eigenen Schlüssel zeigen – der Test-Schlüssel der Testversion bleibt verborgen
+        var bflInput by remember { mutableStateOf(settings.ownBflKey) }
         AlertDialog(
             onDismissRequest = { showImageProvider = false },
             title = { Text("Bildgenerator wählen") },
@@ -624,6 +625,14 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 12.dp)
                     )
+                    if (settings.usesTestBflKey) {
+                        Text(
+                            "✓ Test-Schlüssel aktiv – in der Testversion ist bereits ein Black-Forest-Labs-Schlüssel hinterlegt. " +
+                                "Du musst nichts eintragen.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
                     run {
                         OutlinedTextField(
                             value = bflInput, onValueChange = { bflInput = it },

@@ -33,7 +33,10 @@ data class AppSettings(
     val imageAgentId: String? = null,
     val cachedModels: List<String> = emptyList(),
     val imageProvider: String = IMAGE_AUTO,
+    /** Wirksamer Black-Forest-Labs-Schlüssel: eigener, sonst der Test-Schlüssel der Testversion. */
     val bflKey: String = "",
+    /** Selbst eingetragener Black-Forest-Labs-Schlüssel (leer = keiner). */
+    val ownBflKey: String = "",
     /** Beim App-Start die Nr. 1 der Charts (Hörprobe) abspielen. */
     val startMusic: Boolean = false,
     /** Deezer-Genre für die Start-Musik (0 = alle Charts). */
@@ -48,6 +51,7 @@ data class AppSettings(
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
     val usesTestKey: Boolean get() = ownApiKey.isBlank() && apiKey.isNotBlank()
+    val usesTestBflKey: Boolean get() = ownBflKey.isBlank() && bflKey.isNotBlank()
 
     companion object {
         // "-latest"-Aliase zeigen immer auf die neueste Modellgeneration von Mistral –
@@ -86,8 +90,11 @@ class SettingsRepository(private val context: Context) {
         val ANSWER_STYLE = stringPreferencesKey("answer_style")
     }
 
-    val settings: Flow<AppSettings> = combine(context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey) { p, shared ->
+    val settings: Flow<AppSettings> = combine(
+        context.dataStore.data, eu.kigenc.app.ui.Beta.sharedKey, eu.kigenc.app.ui.Beta.sharedBflKey,
+    ) { p, shared, sharedBfl ->
         val own = p[Keys.API_KEY]?.let { Crypto.decrypt(it) }.orEmpty()
+        val ownBfl = p[Keys.BFL_KEY]?.let { Crypto.decrypt(it) }.orEmpty()
         AppSettings(
             apiKey = own.ifBlank { shared.orEmpty() },
             ownApiKey = own,
@@ -101,7 +108,8 @@ class SettingsRepository(private val context: Context) {
             imageAgentId = p[Keys.IMAGE_AGENT],
             cachedModels = p[Keys.MODELS]?.split('\n')?.filter { it.isNotBlank() }.orEmpty(),
             imageProvider = p[Keys.IMAGE_PROVIDER] ?: AppSettings.IMAGE_AUTO,
-            bflKey = p[Keys.BFL_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
+            bflKey = ownBfl.ifBlank { sharedBfl.orEmpty() },
+            ownBflKey = ownBfl,
             startMusic = p[Keys.START_MUSIC] ?: false,
             musicGenre = p[Keys.MUSIC_GENRE] ?: 0,
             memoryEnabled = p[Keys.MEMORY_ENABLED] ?: true,

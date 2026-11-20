@@ -161,7 +161,7 @@ struct OnboardingView: View {
 struct BetaGateView<Content: View>: View {
     @ViewBuilder let content: () -> Content
     @State private var unlocked = Beta.storedCode != nil
-    @State private var keyReady = !Beta.hasSharedKey
+    @State private var keyReady = !Beta.hasSharedKey && !Beta.hasSharedBflKey
     @State private var code = ""
     @State private var error: String?
 
