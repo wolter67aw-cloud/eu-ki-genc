@@ -1,5 +1,5 @@
 // Black-Forest-Labs-Schlüssel der Testversion, je Zugangscode verschlüsselt (PBKDF2 + AES-GCM, Salt „kigenc-beta-bfl-v1“).
 // Gleiche Werte wie „betaBflBlobs“ in gradle.properties (Android). Leer = kein Test-Schlüssel hinterlegt.
 enum BetaBflBlobs {
-    static let value = ""
+    static let value = "jLt/VVhQak5eO2J9gPjIkJND6A9yt7KZKKEE6uDWo2Oio8Ki9HvvqrPihmgMd3gTDddcNRuNyzh4VExUHGy3iA==,jdSA7m4xjNDEL+cTWWjH4VCdDvd9JehEpCaU/KFqXfR6/GbFDSMmeLWvqUaLmlFYjFXbUpYqH2fxy+znv4PRxw==,GRPNjO6XWJ6jWJg7M5zqRE21m+nfRjiLi1gQah+jV+E2O1QyblYkiOQdakfZ7I1ShXjKE3rHuTMMOXChgWmXNQ==,vYzn5adl8bANAcS6WTOYP1hz7qcJKPgtH1ppy7yUGDDegttSYFAW9psi2Q+vAyzesmNJnsdtj0DVUKuEijIuRg==,wnR2SB8IAWIU95RZGWtmo2Yh4YHhUD5vbFB/3sNBt73ygDU7wR/cyBFzBYneeIZe6lQVyci5LTymOZS9cgZCTA==,DoxMKI0M7Eo+cwvJaU02CIROx/VHYlZX6e6ez8yM2hnu8iw9/C76QZ9nU3slqmgYBaGqVVGZVTA2Gd1rcVPNyQ==,HESt72uTUwgLdxoddcl407PQIGzgIv7gqVdyPB/BG6ElSjw3G6PVQaB5OAX8Ajm8Y2R9XcReD0if07r93/6k9w==,qrQc4Au9bkw0IowDjoVwPUSsiwr1OrzLJB77f1OOfO2RFo3bOR3bVVhjLiySk6uYDWx7nyuhy/crDipBtN+o7g==,riHdgYB2EbDY7J9mcpoiZ5C2IyEN4Tzfrsi6yui8UmN84+PUNu8qHPtQlAF/sCnUafbFgpsXQfCnQGVOVcaK3w==,iKH/Fg6o/E9DWitTVygIP3/PsIbldQuk2rUOXYWlCzz9M0v/EzdVD8gYsMEAqLWxlcV6fXqWYSZUi7C+98lOjQ==,Fw6Z+XFXA2P/OeeuO0TRk5KDOADN/agGXzHDILlyhBq1INN2IJs8yUzut4Vj8RucDVpZTcNnV8YuS0+V4Dc5PA==,KhyIOFBuJzxnMFqrTa7LmojhspYxnI+PoeqLp/UqsXh4bolTywbpc7JmExZSYrbwQBcRl/NUbvQWLe47MxDBqw=="
 }
