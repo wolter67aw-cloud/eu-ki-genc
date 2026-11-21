@@ -316,7 +316,7 @@ final class StartModel: ObservableObject {
                     ResultStore.shared.add(kind: "Start: \(c.title)", title: content, text: result)
                 case .research:
                     status = "Recherchiere im Web …"
-                    let (text, src) = try await MistralClient.shared.webSearch(key: settings.key, model: "mistral-medium-latest", question: prompt)
+                    let (text, src) = try await MistralClient.shared.webSearchOrKnowledge(key: settings.key, model: "mistral-medium-latest", question: prompt, fallbackModel: settings.chatModel)
                     result = text
                     sources = src
                     ResultStore.shared.add(kind: "Start: Recherche", title: content, text: text + src.map { "\n- [\($0.0)](\($0.1))" }.joined())

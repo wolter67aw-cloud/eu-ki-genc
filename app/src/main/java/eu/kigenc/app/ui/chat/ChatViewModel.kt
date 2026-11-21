@@ -285,7 +285,13 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 } else if (_state.value.webSearch && mode == ChatMode.CHAT && images.isEmpty()) {
                     // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
                     val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
-                    val r = app.mistral.webSearch(settings.apiKey, model, webQuestion(history, style + memoryText + (project?.systemText(8_000) ?: "")))
+                    // Zeitlimit 90 s; klappt die Websuche nicht, antwortet das Modell ohne aktuelle Quellen (mit Hinweis)
+                    val r = app.mistral.webSearchOrKnowledge(
+                        settings.apiKey, model,
+                        webQuestion(history, style + memoryText + (project?.systemText(8_000) ?: "")),
+                        fallbackModel = model,
+                        fallback = buildApiMessages(history, project, memory = style + memoryText),
+                    )
                     answer.append(r.text.ifBlank { "(keine Antwort)" })
                     if (r.sources.isNotEmpty()) {
                         answer.append("\n\n**Quellen:**\n")

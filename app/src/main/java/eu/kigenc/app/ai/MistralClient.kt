@@ -1,7 +1,11 @@
 package eu.kigenc.app.ai
 
 import eu.kigenc.app.data.ModelInfo
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -56,6 +60,32 @@ class MistralClient {
         private const val MAX_ATTEMPTS = 3
         const val FALLBACK_MODEL = "mistral-small-latest"
         const val TRANSCRIBE_MODEL = "voxtral-mini-latest"
+        /** Modell für die Recherche (Websuche zuverlässig, wie in der iPhone-App). */
+        const val WEB_MODEL = "mistral-medium-latest"
+        /** Höchstdauer einer Websuche, danach Abbruch (statt minutenlang zu „hängen“). */
+        const val WEB_SEARCH_TIMEOUT_MS = 90_000L
+    }
+
+    /**
+     * Führt eine blockierende Anfrage so aus, dass Abbrechen (Knopf „Abbrechen“, Verlassen, Zeitlimit) sofort wirkt:
+     * Die Verbindung wird dann getrennt, statt auf das Ende der Antwort zu warten.
+     */
+    private suspend fun <T> HttpURLConnection.cancellable(block: HttpURLConnection.() -> T): T = coroutineScope {
+        val call = async(Dispatchers.IO) {
+            try {
+                block()
+            } catch (e: IOException) {
+                // Verbindung wurde wegen Abbruch getrennt → als Abbruch melden, nicht als Netzwerkfehler
+                ensureActive()
+                throw e
+            }
+        }
+        try {
+            call.await()
+        } catch (e: CancellationException) {
+            disconnect()
+            throw e
+        }
     }
 
     private fun open(path: String, method: String, apiKey: String, readTimeoutMs: Int = 120_000): HttpURLConnection {
@@ -220,6 +250,34 @@ class MistralClient {
 
     /** Recherche im Internet über das eingebaute Web-Search-Werkzeug von Mistral. */
     suspend fun webSearch(apiKey: String, model: String, question: String): SearchResult =
+        withTimeoutOrNull(WEB_SEARCH_TIMEOUT_MS) { webSearchUnlimited(apiKey, model, question) }
+            ?: throw MistralException(
+                408,
+                "Die Websuche hat zu lange gebraucht (über ${WEB_SEARCH_TIMEOUT_MS / 1000} Sekunden) und wurde abgebrochen."
+            )
+
+    /**
+     * Websuche; klappt sie nicht (Zeitlimit, Werkzeug gerade nicht verfügbar, Serverfehler), kommt die Antwort
+     * aus dem Modellwissen – mit deutlichem Hinweis, dass sie ohne aktuelle Quellen ist.
+     */
+    suspend fun webSearchOrKnowledge(
+        apiKey: String,
+        model: String,
+        question: String,
+        fallbackModel: String,
+        fallback: List<ApiMessage> = listOf(ApiMessage("user", question)),
+    ): SearchResult = try {
+        webSearch(apiKey, model, question)
+    } catch (e: MistralException) {
+        if (e.code == 401 || e.code == 429) throw e
+        val text = complete(apiKey, fallbackModel, fallback, temperature = 0.5)
+        SearchResult(
+            "_Websuche nicht verfügbar (${e.message}) – Antwort aus dem Modellwissen, ohne aktuelle Quellen:_\n\n$text",
+            emptyList(),
+        )
+    }
+
+    private suspend fun webSearchUnlimited(apiKey: String, model: String, question: String): SearchResult =
         withContext(Dispatchers.IO) {
             val prompt = question.trim() + "\n\n(Recherchiere aktuell im Web. Antworte auf Deutsch, gut gegliedert " +
                 "in Markdown, und stütze dich auf die gefundenen Quellen.)"
@@ -228,10 +286,12 @@ class MistralClient {
                 .put("inputs", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
                 .put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
                 .put("store", false)
-            val c = open("/conversations", "POST", apiKey, readTimeoutMs = 180_000)
+            val c = open("/conversations", "POST", apiKey, readTimeoutMs = 120_000)
             val response = try {
-                c.sendJson(body)
-                c.readJson()
+                c.cancellable {
+                    sendJson(body)
+                    readJson()
+                }
             } finally {
                 c.disconnect()
             }
@@ -368,8 +428,11 @@ class MistralClient {
                 .put("store", false)
             val c = open("/conversations", "POST", apiKey, readTimeoutMs = 240_000)
             val response = try {
-                c.sendJson(body)
-                c.readJson()
+                // „Abbrechen“ trennt die Verbindung sofort
+                c.cancellable {
+                    sendJson(body)
+                    readJson()
+                }
             } finally {
                 c.disconnect()
             }

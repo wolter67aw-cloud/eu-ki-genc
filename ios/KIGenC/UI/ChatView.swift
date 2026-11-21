@@ -104,7 +104,9 @@ final class ChatModel: ObservableObject {
                     conversation.messages[index].images = run.images.map { "data:image/png;base64," + $0.base64EncodedString() }
                 } else if useWeb {
                     // Websuche: Mistral sucht selbst im Web und liefert Quellen mit
-                    let (answer, sources) = try await MistralClient.shared.webSearch(key: settings.key, model: model, question: webQuestion)
+                    // Zeitlimit 90 s; klappt die Websuche nicht, antwortet das Modell ohne aktuelle Quellen (mit Hinweis)
+                    let (answer, sources) = try await MistralClient.shared.webSearchOrKnowledge(key: settings.key, model: model, question: webQuestion,
+                                                                                                fallbackModel: model, fallback: apiMessages)
                     var t = answer.isEmpty ? "(keine Antwort)" : answer
                     if !sources.isEmpty {
                         t += "\n\n**Quellen:**\n" + sources.enumerated().map { i, s in

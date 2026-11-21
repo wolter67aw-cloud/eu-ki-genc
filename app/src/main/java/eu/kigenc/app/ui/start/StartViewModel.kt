@@ -178,7 +178,7 @@ class StartViewModel(app: KiApp) : AiToolViewModel(app) {
                 output.value = ""
                 status.value = "Recherchiere im Web …"
                 try {
-                    val r = app.mistral.webSearch(s.apiKey, s.chatModel, prompt)
+                    val r = app.mistral.webSearchOrKnowledge(s.apiKey, eu.kigenc.app.ai.MistralClient.WEB_MODEL, prompt, s.chatModel)
                     output.value = r.text
                     sources.value = r.sources
                     saveResult("Start: Recherche", content.value, r.text + r.sources.joinToString("") { "\n- [${it.first}](${it.second})" })

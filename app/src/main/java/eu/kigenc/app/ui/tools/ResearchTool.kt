@@ -16,8 +16,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -27,6 +31,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import eu.kigenc.app.KiApp
+import eu.kigenc.app.ai.MistralClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class ResearchViewModel(app: KiApp) : AiToolViewModel(app) {
@@ -37,7 +43,7 @@ class ResearchViewModel(app: KiApp) : AiToolViewModel(app) {
         launchAi { s ->
             output.value = ""
             sources.value = emptyList()
-            val result = app.mistral.webSearch(s.apiKey, s.chatModel, question)
+            val result = app.mistral.webSearchOrKnowledge(s.apiKey, MistralClient.WEB_MODEL, question, s.chatModel)
             output.value = result.text.ifBlank { "Keine Antwort erhalten." }
             sources.value = result.sources
             if (result.text.isNotBlank()) {
@@ -58,6 +64,15 @@ fun ResearchScreen(vm: ResearchViewModel, onBack: () -> Unit, modifier: Modifier
     val message by vm.message.collectAsStateWithLifecycle()
     val uri = LocalUriHandler.current
     var question by rememberSaveable { mutableStateOf("") }
+    // Sekunden seit Start der Recherche – zeigt, dass noch gearbeitet wird
+    var seconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(busy) {
+        seconds = 0
+        while (busy) {
+            delay(1000)
+            seconds++
+        }
+    }
 
     ToolScaffold("Recherche", onBack, modifier, message, vm::clearMessage) { inner ->
         LazyColumn(contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
@@ -86,9 +101,18 @@ fun ResearchScreen(vm: ResearchViewModel, onBack: () -> Unit, modifier: Modifier
             }
             item {
                 Button(onClick = { vm.search(question) }, enabled = !busy && question.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
-                    Text(if (busy) "Recherchiere …" else "Recherchieren")
+                    Text(if (busy) "Recherchiere … $seconds s" else "Recherchieren")
                 }
-                if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                if (busy) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text(
+                        "Die Websuche dauert meist 10–60 Sekunden. Nach ${MistralClient.WEB_SEARCH_TIMEOUT_MS / 1000} Sekunden " +
+                            "wird abgebrochen und ohne Websuche geantwortet.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                    TextButton(onClick = vm::stop, modifier = Modifier.fillMaxWidth()) { Text("Abbrechen") }
+                }
             }
             if (output.isNotEmpty()) item { ResultCard(output, busy, "research") }
             if (sources.isNotEmpty()) {

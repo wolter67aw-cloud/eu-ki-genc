@@ -79,13 +79,19 @@ final class MistralClient {
     }
 
     private func json(_ r: URLRequest) async throws -> [String: Any] {
+        let data = try await checkedData(r)
+        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+    }
+
+    /// Antwortdaten einer Anfrage; bei Fehlerstatus eine verständliche Fehlermeldung.
+    private func checkedData(_ r: URLRequest) async throws -> Data {
         let (data, resp) = try await session.data(for: r)
         let http = resp as? HTTPURLResponse
         let status = http?.statusCode ?? 0
         guard (200...299).contains(status) else {
             throw Self.errorFor(status: status, body: data, headers: http?.allHeaderFields ?? [:])
         }
-        return (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        return data
     }
 
     private static func contentText(_ content: Any?) -> String {
@@ -206,13 +212,45 @@ final class MistralClient {
 
     // MARK: Recherche
 
+    /// Höchstdauer einer Websuche in Sekunden, danach Abbruch (statt minutenlang zu „hängen“).
+    static let webSearchTimeout: UInt64 = 90
+
+    /// Websuche; klappt sie nicht (Zeitlimit, Werkzeug gerade nicht verfügbar, Serverfehler), kommt die Antwort
+    /// aus dem Modellwissen – mit deutlichem Hinweis, dass sie ohne aktuelle Quellen ist.
+    func webSearchOrKnowledge(key: String, model: String, question: String, fallbackModel: String,
+                              fallback: [ApiMessage]? = nil) async throws -> (String, [(String, String)]) {
+        do {
+            let r = try await webSearch(key: key, model: model, question: question)
+            if r.0.isEmpty { throw APIError(code: 0, message: "Keine Antwort erhalten.") }
+            return r
+        } catch {
+            if Task.isCancelled { throw error }
+            if let e = error as? APIError, e.code == 401 || e.code == 429 { throw error }
+            let text = try await complete(key: key, model: fallbackModel,
+                                          messages: fallback ?? [ApiMessage(role: "user", text: question)], temperature: 0.5)
+            return ("_Websuche nicht verfügbar (\(friendly(error))) – Antwort aus dem Modellwissen, ohne aktuelle Quellen:_\n\n" + text, [])
+        }
+    }
+
     func webSearch(key: String, model: String, question: String) async throws -> (String, [(String, String)]) {
         let prompt = question + "\n\n(Recherchiere aktuell im Web. Antworte auf Deutsch, gut gegliedert in Markdown, gestützt auf die Quellen.)"
         let body: [String: Any] = [
             "model": model, "inputs": [["role": "user", "content": prompt]],
             "tools": [["type": "web_search"]], "store": false,
         ]
-        let o = try await json(request("/conversations", key: key, body: body))
+        let req = request("/conversations", key: key, body: body)
+        // Hartes Zeitlimit: wer zuerst fertig ist (Antwort oder Uhr), gewinnt; der Rest wird abgebrochen.
+        let data: Data = try await withThrowingTaskGroup(of: Data.self) { group in
+            group.addTask { try await self.checkedData(req) }
+            group.addTask {
+                try await Task.sleep(nanoseconds: Self.webSearchTimeout * 1_000_000_000)
+                throw APIError(code: 408, message: "Die Websuche hat zu lange gebraucht (über \(Self.webSearchTimeout) Sekunden) und wurde abgebrochen.")
+            }
+            defer { group.cancelAll() }
+            guard let first = try await group.next() else { return Data() }
+            return first
+        }
+        let o = (try JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
         var text = ""
         var sources: [(String, String)] = []
         for entry in o["outputs"] as? [[String: Any]] ?? [] where (entry["type"] as? String) == "message.output" {

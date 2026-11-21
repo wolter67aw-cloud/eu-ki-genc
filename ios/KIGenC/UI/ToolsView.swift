@@ -603,14 +603,25 @@ struct ResearchView: View {
     @State private var sources: [(String, String)] = []
     @State private var error: String?
     @State private var busy = false
+    @State private var task: Task<Void, Never>?
+    @State private var started = Date()
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 TextField("Was möchtest du recherchieren?", text: $question, axis: .vertical).lineLimit(2...5)
                     .padding(12).background(Theme.card, in: RoundedRectangle(cornerRadius: 14))
-                GradientButton(title: "Recherchieren", icon: "globe", busy: busy) { Task { await run() } }
-                    .disabled(question.trimmingCharacters(in: .whitespaces).isEmpty || !settings.hasKey)
+                GradientButton(title: "Recherchieren", icon: "globe", busy: busy) { task = Task { await run() } }
+                    .disabled(busy || question.trimmingCharacters(in: .whitespaces).isEmpty || !settings.hasKey)
+                if busy {
+                    // Sekunden seit Start – zeigt, dass noch gearbeitet wird
+                    TimelineView(.periodic(from: started, by: 1)) { ctx in
+                        Text("Recherchiere … \(max(0, Int(ctx.date.timeIntervalSince(started)))) s – die Websuche dauert meist 10–60 Sekunden. Nach \(MistralClient.webSearchTimeout) Sekunden wird ohne Websuche geantwortet.")
+                            .font(.caption).foregroundStyle(Theme.secondaryText)
+                    }
+                    Button("Abbrechen", role: .cancel) { task?.cancel() }
+                        .frame(maxWidth: .infinity)
+                }
                 if let error { ErrorCard(message: error) }
                 if !answer.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
@@ -632,12 +643,13 @@ struct ResearchView: View {
 
     @MainActor
     private func run() async {
-        busy = true; error = nil; answer = ""; sources = []
-        defer { busy = false }
+        busy = true; error = nil; answer = ""; sources = []; started = Date()
+        defer { busy = false; task = nil }
         do {
             (answer, sources) = try await MistralClient.shared.webSearch(key: settings.key, model: "mistral-medium-latest", question: question)
             if answer.isEmpty { throw APIError(code: 0, message: "Keine Antwort erhalten.") }
         } catch {
+            if Task.isCancelled { return }
             // Ohne Websuche: Antwort aus dem Modellwissen
             do {
                 answer = "_Websuche nicht verfügbar (\(friendly(error))) – Antwort aus dem Modellwissen:_\n\n"
