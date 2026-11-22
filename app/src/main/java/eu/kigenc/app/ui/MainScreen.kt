@@ -14,6 +14,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -171,15 +187,19 @@ fun MainScreen(
     }
 
     val imeVisible = WindowInsets.isImeVisible
+    // Querformat (Handy gedreht, Tablet, Foldable quer): Navigation als Leiste links statt unten → mehr Platz in der Höhe
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val useRail = config.screenWidthDp > config.screenHeightDp && config.screenWidthDp >= 480
+    val navTabs = Tab.entries.filter { it != Tab.CODE }
 
     Scaffold(
         // Leiste „Nr. 1 der Charts“ erscheint über der Navigationsleiste, solange die Hörprobe läuft
         snackbarHost = { eu.kigenc.app.ui.components.NowPlayingBar() },
         bottomBar = {
-            if (!imeVisible) {
+            if (!imeVisible && !useRail) {
                 NavigationBar {
                     // „Code“ ist über Start und Werkzeuge erreichbar (max. 5 Einträge in der Leiste)
-                    Tab.entries.filter { it != Tab.CODE }.forEach { t ->
+                    navTabs.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t || (t == Tab.TOOLS && tab == Tab.CODE),
                             onClick = { tab = t },
@@ -191,9 +211,10 @@ fun MainScreen(
             }
         }
     ) { padding ->
-        val screenModifier = Modifier
+        val baseModifier = Modifier
             .padding(padding)
             .consumeWindowInsets(padding)
+        val screens: @Composable (Modifier) -> Unit = { screenModifier ->
         stateHolder.SaveableStateProvider(tab.name) {
             when (tab) {
                 Tab.START -> eu.kigenc.app.ui.start.StartScreen(
@@ -219,6 +240,36 @@ fun MainScreen(
                 }
                 Tab.SETTINGS -> SettingsScreen(screenModifier)
             }
+        }
+        }
+        if (useRail) {
+            Row(
+                baseModifier
+                    // Kamera-Aussparung seitlich im Querformat freihalten
+                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+            ) {
+                NavigationRail(windowInsets = WindowInsets(0, 0, 0, 0)) {
+                    Column(
+                        Modifier
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        navTabs.forEach { t ->
+                            NavigationRailItem(
+                                selected = tab == t || (t == Tab.TOOLS && tab == Tab.CODE),
+                                onClick = { tab = t },
+                                icon = { Icon(if (tab == t) t.selectedIcon else t.icon, contentDescription = null) },
+                                label = { Text(t.label) }
+                            )
+                        }
+                    }
+                }
+                Box(Modifier.weight(1f).fillMaxHeight()) { screens(Modifier.fillMaxSize()) }
+            }
+        } else {
+            screens(baseModifier)
         }
     }
 

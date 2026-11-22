@@ -223,10 +223,17 @@ struct BetaGateView<Content: View>: View {
     }
 
     private func gate<V: View>(@ViewBuilder _ inner: () -> V) -> some View {
-        VStack(spacing: 18) { inner() }
-            .padding(28)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Theme.backgroundGradient.ignoresSafeArea())
+        // Scrollbar, damit im Querformat (wenig Höhe, Tastatur) nichts abgeschnitten wird; hochkant weiterhin mittig
+        GeometryReader { geo in
+            ScrollView {
+                VStack(spacing: 18) { inner() }
+                    .padding(28)
+                    .frame(maxWidth: 560)
+                    .frame(maxWidth: .infinity, minHeight: geo.size.height)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .background(Theme.backgroundGradient.ignoresSafeArea())
     }
 }
 

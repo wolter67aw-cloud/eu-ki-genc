@@ -160,6 +160,8 @@ private fun BetaMessage(title: String, text: String) {
         Modifier
             .fillMaxSize()
             .systemBarsPadding()
+            // Im Querformat scrollbar, damit nichts abgeschnitten wird
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center

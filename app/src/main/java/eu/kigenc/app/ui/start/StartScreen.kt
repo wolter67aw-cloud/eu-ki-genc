@@ -200,7 +200,9 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
             Text("Oder Schritt für Schritt", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp))
         }
         item {
-            val cols = 3
+            // Spaltenzahl passt sich der Breite an (hochkant 3, quer bis zu 6)
+            androidx.compose.foundation.layout.BoxWithConstraints {
+            val cols = ((maxWidth + 10.dp) / 110.dp).toInt().coerceIn(3, 6)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 START_CATEGORIES.chunked(cols).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -221,6 +223,7 @@ private fun StartHome(vm: StartViewModel, inner: PaddingValues, onOpenTool: (Too
                         repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
                     }
                 }
+            }
             }
         }
     }

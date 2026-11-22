@@ -21,7 +21,7 @@ struct ToolsView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
                     ForEach(tools, id: \.0) { title, icon, sub, dest in
                         NavigationLink {
                             dest.navigationTitle(title == "Code-Assistent" ? "Code" : title).navigationBarTitleDisplayMode(.inline)

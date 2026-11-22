@@ -33,7 +33,7 @@ struct IdeasView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Halte Gedanken fest – als Foto, Sprachmemo, Skizze oder Zeitkapsel. Die KI vergibt passende Schlagwörter, damit du alles wiederfindest.")
                     .font(.callout).foregroundStyle(Theme.secondaryText)
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 8)], spacing: 8) {
                     action("Moment", "camera") { editing = .moment }
                     action("Sprachmemo", "mic") { editing = .memo }
                     action("Skizze", "pencil.tip") { editing = .sketch }

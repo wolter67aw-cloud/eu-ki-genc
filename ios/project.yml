@@ -30,6 +30,8 @@ targets:
           UIApplicationSupportsMultipleScenes: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         UIUserInterfaceStyle: Dark
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: "KI-GenC nutzt das Mikrofon für Spracheingabe und Audio-Aufnahmen zur Transkription."
