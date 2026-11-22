@@ -224,9 +224,10 @@ struct BetaGateView<Content: View>: View {
 
     private func gate<V: View>(@ViewBuilder _ inner: () -> V) -> some View {
         // Scrollbar, damit im Querformat (wenig Höhe, Tastatur) nichts abgeschnitten wird; hochkant weiterhin mittig
-        GeometryReader { geo in
+        let content = inner()
+        return GeometryReader { geo in
             ScrollView {
-                VStack(spacing: 18) { inner() }
+                VStack(spacing: 18) { content }
                     .padding(28)
                     .frame(maxWidth: 560)
                     .frame(maxWidth: .infinity, minHeight: geo.size.height)

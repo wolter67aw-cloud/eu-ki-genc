@@ -130,6 +130,8 @@ struct IdeaRow: View {
 // MARK: Erfassen
 
 struct IdeaEditorView: View {
+    /// Querformat auf dem iPhone → wenig Höhe, Zeichenfläche niedriger
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     let kind: IdeaKind
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var session: SessionController
@@ -152,7 +154,7 @@ struct IdeaEditorView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(intro).font(.callout).foregroundStyle(Theme.secondaryText)
                 if kind == .sketch {
-                    SketchCanvas(drawing: $drawing).frame(height: 420).clipShape(RoundedRectangle(cornerRadius: 12))
+                    SketchCanvas(drawing: $drawing).frame(height: verticalSizeClass == .compact ? 260 : 420).clipShape(RoundedRectangle(cornerRadius: 12))
                     HStack {
                         Text("Werkzeuge erscheinen unten – Stift, Farben, Radierer.").font(.caption).foregroundStyle(Theme.secondaryText)
                         Spacer()
