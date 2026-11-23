@@ -47,6 +47,8 @@ data class AppSettings(
     val memoryAuto: Boolean = true,
     /** Antwortstil im Chat (siehe [ANSWER_STYLES]). */
     val answerStyle: String = "normal",
+    /** Schriftgröße in der App (Stufe 0–3, siehe ui/theme/Theme.kt → TEXT_SIZES), zusätzlich zur Geräteeinstellung. */
+    val textSize: Int = 0,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
@@ -88,6 +90,7 @@ class SettingsRepository(private val context: Context) {
         val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         val MEMORY_AUTO = booleanPreferencesKey("memory_auto")
         val ANSWER_STYLE = stringPreferencesKey("answer_style")
+        val TEXT_SIZE = intPreferencesKey("text_size")
     }
 
     val settings: Flow<AppSettings> = combine(
@@ -115,6 +118,7 @@ class SettingsRepository(private val context: Context) {
             memoryEnabled = p[Keys.MEMORY_ENABLED] ?: true,
             memoryAuto = p[Keys.MEMORY_AUTO] ?: true,
             answerStyle = p[Keys.ANSWER_STYLE] ?: "normal",
+            textSize = p[Keys.TEXT_SIZE] ?: 0,
         )
     }.flowOn(Dispatchers.IO)
 
@@ -139,6 +143,7 @@ class SettingsRepository(private val context: Context) {
         if (id == null) it.remove(Keys.IMAGE_AGENT) else it.set(Keys.IMAGE_AGENT, id)
     }
 
+    suspend fun setTextSize(step: Int) = context.dataStore.edit { it[Keys.TEXT_SIZE] = step.coerceIn(0, 3) }
     suspend fun setAnswerStyle(id: String) = context.dataStore.edit { it[Keys.ANSWER_STYLE] = id }
     suspend fun setMemoryEnabled(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_ENABLED] = v }
     suspend fun setMemoryAuto(v: Boolean) = context.dataStore.edit { it[Keys.MEMORY_AUTO] = v }

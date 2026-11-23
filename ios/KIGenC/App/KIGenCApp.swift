@@ -13,6 +13,7 @@ struct KIGenCApp: App {
                     .id(session.sessionID) // neue Sitzung → alle Eingaben leer
             }
             .id(settings.design) // Design gewechselt → Oberfläche neu aufbauen
+            .modifier(AppTextSize(steps: settings.textSize))
             .environmentObject(settings)
             .environmentObject(session)
             .preferredColorScheme(AppDesign.byID(settings.design).dark ? .dark : .light)
@@ -25,6 +26,19 @@ struct KIGenCApp: App {
             // App verlassen → Start-Musik verstummt
             if phase == .background { ChartMusic.shared.stop() }
         }
+    }
+}
+
+/// Größere Schrift in der App: hebt die Textgröße des Geräts (Dynamic Type) um 0–3 Stufen an.
+struct AppTextSize: ViewModifier {
+    let steps: Int
+    @Environment(\.dynamicTypeSize) private var deviceSize
+
+    func body(content: Content) -> some View {
+        let all = DynamicTypeSize.allCases
+        let index = all.firstIndex(of: deviceSize) ?? all.startIndex
+        let target = all[min(index + max(steps, 0), all.count - 1)]
+        content.dynamicTypeSize(target)
     }
 }
 

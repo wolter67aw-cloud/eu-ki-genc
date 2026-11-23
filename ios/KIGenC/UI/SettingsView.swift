@@ -54,6 +54,20 @@ struct SettingsView: View {
                 } header: { Text("App-Symbol") } footer: { Text("Symbol auf dem Home-Bildschirm. iOS bestätigt den Wechsel kurz mit einer Meldung.") }
                 .listRowBackground(Theme.card)
 
+                Section {
+                    Picker(selection: $settings.textSize) {
+                        ForEach(AppSettings.textSizes, id: \.steps) { Text($0.name).tag($0.steps) }
+                    } label: {
+                        Label("Schriftgröße", systemImage: "textformat.size")
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityLabel("Schriftgröße")
+                    Text("So sieht Text in der App aus.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                } header: { Text("Schriftgröße") } footer: { Text("Gilt zusätzlich zur Textgröße in den iOS-Einstellungen (Anzeige & Helligkeit).") }
+                .listRowBackground(Theme.card)
+
                 Section("Modelle") {
                     Picker("Chat", selection: $settings.chatModel) { ForEach(models(AppSettings.defaultChatModels, settings.chatModel), id: \.self) { Text($0) } }
                     Picker("Code", selection: $settings.codeModel) { ForEach(models(AppSettings.defaultCodeModels, settings.codeModel), id: \.self) { Text($0) } }

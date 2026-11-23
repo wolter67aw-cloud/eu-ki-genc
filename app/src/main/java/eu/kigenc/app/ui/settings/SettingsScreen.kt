@@ -37,6 +37,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.MusicNote
@@ -339,6 +343,9 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         scope.launch { app.settings.setDynamicColor(it) }
                     }
                 }
+            }
+            item {
+                TextSizeChooser(settings.textSize) { step -> scope.launch { app.settings.setTextSize(step) } }
             }
             item {
                 SwitchRow(Icons.Outlined.RecordVoiceOver, "Antworten automatisch vorlesen", "Nutzt die Sprachausgabe deines Geräts", settings.autoSpeak) {
@@ -754,6 +761,42 @@ private val IMAGE_PROVIDERS = listOf(
 
 private fun imageProviderLabel(id: String) = IMAGE_PROVIDERS.firstOrNull { it.first == id }?.second ?: "Automatisch (empfohlen)"
 
+/** Schriftgröße der App wählen (zusätzlich zur Schriftgröße des Geräts) – mit Beispieltext. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun TextSizeChooser(selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.FormatSize, null)
+            Spacer(Modifier.width(16.dp))
+            Text(
+                "Schriftgröße",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { heading() },
+            )
+        }
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(start = 40.dp, top = 4.dp),
+        ) {
+            eu.kigenc.app.ui.theme.TEXT_SIZES.forEachIndexed { i, (name, _) ->
+                androidx.compose.material3.FilterChip(
+                    selected = i == selected,
+                    onClick = { onSelect(i) },
+                    label = { Text(name) },
+                    modifier = Modifier.semantics { contentDescription = "Schriftgröße $name" },
+                )
+            }
+        }
+        Text(
+            "So sieht Text in der App aus. Gilt zusätzlich zur Schriftgröße in den Einstellungen deines Geräts.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 40.dp, top = 4.dp),
+        )
+    }
+}
+
 /** Genre der Start-Musik wählen und direkt anhören. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -804,7 +847,9 @@ private fun SectionTitle(text: String) {
         text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp)
+        modifier = Modifier
+            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 8.dp)
+            .semantics { heading() }
     )
 }
 

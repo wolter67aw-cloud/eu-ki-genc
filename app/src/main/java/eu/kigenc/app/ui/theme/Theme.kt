@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -232,9 +234,21 @@ val LocalBrandTheme = staticCompositionLocalOf { true }
 /** Verlauf für Akzente (z. B. Buttons, Überschriften) im aktuellen Design. */
 val LogoAccentBrush = Brush.linearGradient(listOf(LogoCyan, LogoBlue, LogoPurple))
 
+/** Schriftgrößen-Stufen der App (Name, Faktor) – wirken zusätzlich zur Schriftgröße des Geräts. */
+val TEXT_SIZES: List<Pair<String, Float>> = listOf(
+    "Normal" to 1f,
+    "Groß" to 1.15f,
+    "Sehr groß" to 1.3f,
+    "Maximal" to 1.5f,
+)
+
+fun textSizeFactor(step: Int): Float = TEXT_SIZES.getOrNull(step)?.second ?: 1f
+
 @Composable
-fun KiTheme(dynamicColor: Boolean = false, designId: String? = null, content: @Composable () -> Unit) {
+fun KiTheme(dynamicColor: Boolean = false, designId: String? = null, textSize: Int = 0, content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
+    val density = LocalDensity.current
+    val factor = textSizeFactor(textSize)
     val context = LocalContext.current
     val design = designById(designId)
     val useDynamic = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
@@ -242,7 +256,12 @@ fun KiTheme(dynamicColor: Boolean = false, designId: String? = null, content: @C
         useDynamic -> if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         else -> design.colorScheme()
     }
-    CompositionLocalProvider(LocalBrandTheme provides !useDynamic, LocalDesign provides design) {
+    CompositionLocalProvider(
+        LocalBrandTheme provides !useDynamic,
+        LocalDesign provides design,
+        // Größere Schrift in der App: nur Text (sp) wächst, Abstände und Symbole (dp) bleiben gleich.
+        LocalDensity provides Density(density.density, density.fontScale * factor),
+    ) {
         MaterialTheme(
             colorScheme = scheme,
             typography = if (useDynamic) Typography() else design.typography(),

@@ -76,6 +76,8 @@ final class AppSettings: ObservableObject {
     @Published var memoryAuto: Bool { didSet { d.set(memoryAuto, forKey: "memory_auto") } }
     /// Antwortstil im Chat (siehe `answerStyles`).
     @Published var answerStyle: String { didSet { d.set(answerStyle, forKey: "answer_style") } }
+    /// Schriftgröße in der App (Stufe 0–3), zusätzlich zur Textgröße des Geräts.
+    @Published var textSize: Int { didSet { d.set(textSize, forKey: "text_size") } }
 
     var hasKey: Bool { !key.isEmpty }
     /// Eigener Schlüssel, sonst der Test-Schlüssel der Testversion.
@@ -110,7 +112,11 @@ final class AppSettings: ObservableObject {
         memoryEnabled = d.object(forKey: "memory_enabled") as? Bool ?? true
         memoryAuto = d.object(forKey: "memory_auto") as? Bool ?? true
         answerStyle = d.string(forKey: "answer_style") ?? "normal"
+        textSize = min(max(d.integer(forKey: "text_size"), 0), 3)
     }
+
+    /// Schriftgrößen-Stufen: Name und Anzahl Stufen über der Textgröße des Geräts.
+    static let textSizes: [(name: String, steps: Int)] = [("Normal", 0), ("Groß", 1), ("Sehr groß", 2), ("Maximal", 3)]
 
     /// Antwortstile wie bei Claude: Kennung, Name, Anweisung an die KI.
     static let answerStyles: [(id: String, name: String, text: String)] = [

@@ -65,7 +65,7 @@ class HomeActivity : ComponentActivity() {
                     )
                 }
             }
-            KiTheme(dynamicColor = settings?.dynamicColor ?: false, designId = settings?.design) {
+            KiTheme(dynamicColor = settings?.dynamicColor ?: false, designId = settings?.design, textSize = settings?.textSize ?: 0) {
                 AppBackground {
                     BetaGate {
                     MainScreen(
