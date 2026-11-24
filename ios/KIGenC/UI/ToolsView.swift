@@ -11,6 +11,7 @@ struct ToolsView: View {
         ("Ideen-Sammlung", "lightbulb", "Moment, Sprachmemo, Skizze, Zeitkapsel", AnyView(IdeasView())),
         ("Foto-Editor", "slider.horizontal.3", "Filter, Licht, KI-Bearbeitung", AnyView(PhotoEditorView())),
         ("Video", "film", "Analysieren, aufnehmen, Diashow", AnyView(VideoToolView())),
+        ("Werbevideo", "megaphone", "Werbeclips aus Fotos, Videos & Dateien – mit KI-Texten", AnyView(PromoVideoView())),
         ("Transkription", "waveform", "Audio & Video zu Text", AnyView(TranscribeView())),
         ("Recherche", "globe.europe.africa", "Websuche mit Quellen", AnyView(ResearchView())),
         ("Daten & Statistik", "tablecells", "CSV analysieren", AnyView(DataToolView())),

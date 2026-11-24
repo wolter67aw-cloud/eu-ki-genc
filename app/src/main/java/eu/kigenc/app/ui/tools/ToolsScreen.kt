@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.Insights
@@ -52,6 +53,7 @@ enum class Tool(val title: String, val subtitle: String, val icon: ImageVector, 
     PHOTO("Foto-Editor", "Fotos verbessern, Filter, KI-Neugestaltung", Icons.Outlined.PhotoFilter, "Bild & Medien"),
     VIDEO_ANALYSIS("Video analysieren", "Was passiert im Video? Inkl. Ton", Icons.Outlined.Movie, "Bild & Medien"),
     VIDEO_CREATE("Video erstellen", "Diashow-Video aus deinen Fotos", Icons.Outlined.Slideshow, "Bild & Medien"),
+    PROMO_VIDEO("Werbevideo", "Kurze Werbeclips aus Fotos, Videos und Dateien – mit KI-Texten", Icons.Outlined.Campaign, "Bild & Medien"),
     TRANSCRIBE("Audio-Transkription", "Sprache in Text, Protokoll, Zusammenfassung", Icons.Outlined.GraphicEq, "Bild & Medien"),
     DATA("Daten-Analyse", "Tabellen, Statistiken, Muster, Prognosen", Icons.Outlined.Insights, "Analyse & Daten"),
     TASKS("Aufgaben & Termine", "Planen, erinnern, in den Kalender eintragen", Icons.Outlined.Checklist, "Praktische Assistenz"),
@@ -109,6 +111,7 @@ fun ToolsScreen(
         Tool.PHOTO -> PhotoEditorScreen(viewModel(key = "tool_photo_$session") { PhotoEditorViewModel(app) }, back, modifier)
         Tool.VIDEO_ANALYSIS -> VideoAnalysisScreen(viewModel(key = "tool_video_$session") { VideoAnalysisViewModel(app) }, back, modifier)
         Tool.VIDEO_CREATE -> SlideshowScreen(viewModel(key = "tool_slideshow_$session") { SlideshowViewModel(app) }, back, modifier)
+        Tool.PROMO_VIDEO -> PromoVideoScreen(viewModel(key = "tool_promo_$session") { PromoVideoViewModel(app) }, back, modifier)
         Tool.TRANSCRIBE -> TranscribeScreen(viewModel(key = "tool_transcribe_$session") { TranscribeViewModel(app) }, back, modifier)
         Tool.DATA -> DataScreen(viewModel(key = "tool_data_$session") { DataViewModel(app) }, back, modifier)
         Tool.TASKS -> TasksScreen(
