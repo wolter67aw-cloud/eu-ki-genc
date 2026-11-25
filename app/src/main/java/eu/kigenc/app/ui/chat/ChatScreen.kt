@@ -218,21 +218,8 @@ fun ChatScreen(
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(ChatViewModel.MAX_IMAGES)) { uris ->
         vm.attachImages(uris)
     }
-    var cameraUri by remember { mutableStateOf<Uri?>(null) }
-    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
-        if (ok) cameraUri?.let(vm::attachImage)
-    }
-    val launchCamera = {
-        val dir = File(context.cacheDir, "camera").apply { mkdirs() }
-        val file = File(dir, "foto_${System.currentTimeMillis()}.jpg")
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        cameraUri = uri
-        try {
-            takePicture.launch(uri)
-        } catch (_: ActivityNotFoundException) {
-            vm.reportError("Keine Kamera-App gefunden.")
-        }
-    }
+    // Zielpfad übersteht auch einen Neustart der App, während die Kamera-App offen ist
+    val launchCamera = eu.kigenc.app.ui.components.rememberTakePhoto(onError = { vm.reportError(it) }) { vm.attachImage(it) }
 
     val messages = state.current?.messages.orEmpty()
     val listState = rememberLazyListState()
@@ -966,6 +953,14 @@ private fun InputBar(
                         )
                     },
                     maxLines = 6,
+                    // Kamera direkt im Eingabefeld (wie bei Messengern), solange noch nichts getippt ist
+                    trailingIcon = if (allowImages && text.isBlank() && !streaming) {
+                        {
+                            IconButton(onClick = onCamera) {
+                                Icon(Icons.Outlined.PhotoCamera, contentDescription = "Foto aufnehmen", tint = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    } else null,
                     shape = RoundedCornerShape(24.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,

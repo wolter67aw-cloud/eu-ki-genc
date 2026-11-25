@@ -206,6 +206,7 @@ final class ChatModel: ObservableObject {
 
 struct ChatView: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var session: SessionController
     @StateObject private var model = ChatModel()
     @StateObject private var dictation = Dictation()
     @ObservedObject private var store = ConversationStore.shared
@@ -217,6 +218,8 @@ struct ChatView: View {
     @State private var jumpTo: UUID?
     @State private var flashID: UUID?
     @State private var showAttach = false
+    /// Kamera direkt aus der Eingabezeile (Foto wird als Anhang mitgeschickt).
+    @State private var showCamera = false
     /// Eigene Nachricht, die gerade bearbeitet wird (Blatt „Nachricht bearbeiten“).
     @State private var editing: ChatMessage?
     @State private var editText = ""
@@ -270,6 +273,12 @@ struct ChatView: View {
                 }
             }
             .sheet(isPresented: $showHistory) { history }
+            .fullScreenCover(isPresented: $showCamera, onDismiss: { session.externalPickerActive = false }) {
+                CameraPicker { img in
+                    if let img { model.attachments.append(Attachment(kind: .image, name: "Kamera", images: [img])) }
+                }
+                .ignoresSafeArea()
+            }
             .sheet(item: $editing) { m in editSheet(m) }
             .sheet(isPresented: $showProjects) {
                 ProjectsView { p in model.selectProject(p); showProjects = false }
@@ -442,8 +451,18 @@ struct ChatView: View {
                 TextField(model.webSearch ? "Frag mit Websuche …" : model.codeRun ? "Rechnen, auswerten, Diagramm …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
-                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .padding(.leading, 12).padding(.trailing, model.input.isEmpty ? 40 : 12).padding(.vertical, 9)
                     .background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 20))
+                    .overlay(alignment: .trailing) {
+                        // Kamera direkt im Eingabefeld (wie bei Messengern), solange noch nichts getippt ist
+                        if model.input.isEmpty {
+                            Button { session.externalPickerActive = true; showCamera = true } label: {
+                                Image(systemName: "camera").font(.title3).foregroundStyle(Theme.cyan)
+                            }
+                            .padding(.trailing, 10)
+                            .accessibilityLabel("Foto aufnehmen")
+                        }
+                    }
                 Button {
                     dictation.toggle { text in model.input = (model.input.isEmpty ? "" : model.input + " ") + text }
                 } label: {
