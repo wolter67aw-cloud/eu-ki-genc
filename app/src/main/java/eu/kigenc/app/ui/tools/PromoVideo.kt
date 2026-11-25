@@ -19,6 +19,7 @@ import android.graphics.pdf.PdfRenderer
 import android.media.Image as MediaImage
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
+import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
@@ -195,9 +196,27 @@ object PromoRenderer {
         return d.sum() - FADE_MS * (d.size - 1)
     }
 
-    suspend fun render(context: Context, spec: PromoSpec, onProgress: (Float) -> Unit): File = withContext(Dispatchers.Default) {
-        val w = spec.format.w
-        val h = spec.format.h
+    /**
+     * Videogröße: volle Größe, im schonenden Modus (oder wenn der Encoder des Geräts sie nicht kann) 80 %
+     * (576×1024, 576×576, 1024×576). Liefert Breite, Höhe und den passenden Encoder-Namen.
+     */
+    private fun chooseSize(format: PromoFormat, safe: Boolean): Triple<Int, Int, String?> {
+        val full = format.w to format.h
+        val reduced = (format.w * 4 / 5) to (format.h * 4 / 5)
+        val candidates = if (safe) listOf(reduced) else listOf(full, reduced)
+        for ((w, h) in candidates) {
+            val name = runCatching {
+                MediaCodecList(MediaCodecList.REGULAR_CODECS)
+                    .findEncoderForFormat(MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h))
+            }.getOrNull()
+            if (name != null) return Triple(w, h, name)
+        }
+        // Keine Auskunft vom Gerät → kleinere Größe mit Standard-Encoder versuchen
+        return Triple(reduced.first, reduced.second, null)
+    }
+
+    suspend fun render(context: Context, spec: PromoSpec, safe: Boolean, onProgress: (Float) -> Unit): File = withContext(Dispatchers.Default) {
+        val (w, h, codecName) = chooseSize(spec.format, safe)
         val parts: List<Part> = spec.scenes.map { Part.Scene(it, durationOf(it, spec.photoMs, spec.clipMs)) } +
             listOfNotNull(spec.endCard?.let { Part.End(it) })
         require(parts.isNotEmpty()) { "Keine Bilder oder Clips gewählt." }
@@ -210,11 +229,15 @@ object PromoRenderer {
         val totalMs = t
         val totalFrames = max(1, (totalMs * FPS / 1000L).toInt())
         val out = File(File(context.filesDir, "videos").apply { mkdirs() }, "werbevideo_${System.currentTimeMillis()}.mp4")
-        val encoder = FrameEncoder(out, w, h, FPS)
-        val frame = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val encoder = FrameEncoder(out, w, h, FPS, codecName, if (safe) 3_000_000 else null)
+        val frame = try {
+            Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        } catch (e: Throwable) {
+            encoder.abort(); out.delete(); throw e
+        }
         val canvas = Canvas(frame)
         val sources = arrayOfNulls<Source>(parts.size)
-        fun source(i: Int): Source = sources[i] ?: createSource(context, parts[i], i, w, h, spec).also { sources[i] = it }
+        fun source(i: Int): Source = sources[i] ?: createSource(context, parts[i], i, w, h, safe).also { sources[i] = it }
         val textPaints = CaptionPainter(w, h)
         try {
             for (f in 0 until totalFrames) {
@@ -263,11 +286,12 @@ object PromoRenderer {
         }
     }
 
-    private fun createSource(context: Context, part: Part, index: Int, w: Int, h: Int, spec: PromoSpec): Source = when (part) {
+    private fun createSource(context: Context, part: Part, index: Int, w: Int, h: Int, safe: Boolean): Source = when (part) {
         is Part.End -> EndSource(part.card, w, h)
         is Part.Scene -> when (part.scene.kind) {
-            PromoSceneKind.CLIP -> ClipSource(context, part.scene.uri, w, h)
-            PromoSceneKind.PHOTO -> StillSource(prepareStill(decodeImage(context, part.scene.uri), w, h, forceFit = false), index, part.durationMs)
+            // Schonender Modus: Clips mit halb so vielen Einzelbildern (12 statt 24 pro Sekunde)
+            PromoSceneKind.CLIP -> ClipSource(context, part.scene.uri, w, h, stepMs = if (safe) 2000L / FPS else 0L)
+            PromoSceneKind.PHOTO -> StillSource(prepareStill(decodeImage(context, part.scene.uri, if (safe) 1280 else 1600), w, h, forceFit = false), index, part.durationMs)
             PromoSceneKind.PDF_PAGE -> StillSource(prepareStill(renderPdfPage(context, part.scene.uri, part.scene.pageIndex, max(w, h)), w, h, forceFit = true), index, part.durationMs)
         }
     }
@@ -293,7 +317,7 @@ object PromoRenderer {
     }
 
     /** Videoclip: Bild für Bild aus dem Video gelesen (ohne Originalton). */
-    private class ClipSource(context: Context, uri: Uri, private val w: Int, private val h: Int) : Source {
+    private class ClipSource(context: Context, uri: Uri, private val w: Int, private val h: Int, private val stepMs: Long) : Source {
         private val retriever = MediaMetadataRetriever()
         private var last: Bitmap? = null
         private var lastMs = -1L
@@ -307,16 +331,10 @@ object PromoRenderer {
         }
 
         override fun draw(canvas: Canvas, localMs: Long, alpha: Int) {
-            val at = if (durationMs > 0) min(localMs, durationMs - 40).coerceAtLeast(0) else localMs
+            var at = if (durationMs > 0) min(localMs, durationMs - 40).coerceAtLeast(0) else localMs
+            if (stepMs > 0) at = at / stepMs * stepMs
             if (at != lastMs) {
-                val box = max(w, h)
-                val bmp = runCatching {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        retriever.getScaledFrameAtTime(at * 1000, MediaMetadataRetriever.OPTION_CLOSEST, box, box)
-                    } else {
-                        retriever.getFrameAtTime(at * 1000, MediaMetadataRetriever.OPTION_CLOSEST)
-                    }
-                }.getOrNull()
+                val bmp = scaledFrame(retriever, at * 1000, MediaMetadataRetriever.OPTION_CLOSEST, max(w, h))
                 if (bmp != null) {
                     last?.recycle()
                     last = bmp
@@ -493,6 +511,24 @@ object PromoRenderer {
         return out
     }
 
+    /**
+     * Einzelbild eines Videos, höchstens [box] Pixel lang – auch auf Android 8.0 (dort wird das volle Bild
+     * sofort verkleinert, damit 4K-Videos nicht den Speicher füllen). Fehler (auch Speichermangel) → null.
+     */
+    fun scaledFrame(r: MediaMetadataRetriever, timeUs: Long, option: Int, box: Int): Bitmap? = try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            r.getScaledFrameAtTime(timeUs, option, box, box)
+        } else {
+            r.getFrameAtTime(timeUs, option)?.let { full ->
+                val s = min(1f, box.toFloat() / max(full.width, full.height))
+                if (s >= 1f) full else Bitmap.createScaledBitmap(full, max(1, (full.width * s).roundToInt()), max(1, (full.height * s).roundToInt()), true)
+                    .also { if (it !== full) full.recycle() }
+            }
+        }
+    } catch (e: Throwable) {
+        null
+    }
+
     fun decodeImage(context: Context, uri: Uri, maxSide: Int = 1600): Bitmap? = runCatching {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri)) { decoder, info, _ ->
@@ -531,9 +567,14 @@ object PromoRenderer {
 }
 
 /** H.264-Encoder für einzelne Bilder (YUV über getInputImage – wie bei der Diashow). */
-private class FrameEncoder(out: File, private val w: Int, private val h: Int, private val fps: Int) {
-    private val codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-    private val muxer = MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+private class FrameEncoder(out: File, private val w: Int, private val h: Int, private val fps: Int, codecName: String?, bitRate: Int?) {
+    private val codec = codecName?.let { runCatching { MediaCodec.createByCodecName(it) }.getOrNull() }
+        ?: MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
+    private val muxer = try {
+        MediaMuxer(out.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+    } catch (e: Exception) {
+        codec.release(); throw e
+    }
     private val info = MediaCodec.BufferInfo()
     private var track = -1
     private var started = false
@@ -546,7 +587,7 @@ private class FrameEncoder(out: File, private val w: Int, private val h: Int, pr
     init {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, w, h).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
-            setInteger(MediaFormat.KEY_BIT_RATE, if (w == h) 4_000_000 else 6_000_000)
+            setInteger(MediaFormat.KEY_BIT_RATE, bitRate ?: if (w == h) 4_000_000 else 6_000_000)
             setInteger(MediaFormat.KEY_FRAME_RATE, fps)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
         }
@@ -688,6 +729,22 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
     val writing = MutableStateFlow(false)
     val progress = MutableStateFlow<Float?>(null)
     val result = MutableStateFlow<File?>(null)
+    /** Schonender Modus: kleinere Auflösung, Clips mit weniger Einzelbildern (für ältere/knappe Geräte). */
+    val safeMode = MutableStateFlow(false)
+
+    /** Merker „Erstellen läuft“ – bleibt nur liegen, wenn Android die App währenddessen beendet hat. */
+    private val runningMarker = File(app.filesDir, "werbevideo_laeuft.txt")
+
+    init {
+        if (runningMarker.exists()) {
+            val details = runCatching { runningMarker.readText() }.getOrDefault("")
+            ErrorLog.log("Werbevideo", message = "App wurde beim Erstellen beendet ($details)")
+            runningMarker.delete()
+            safeMode.value = true
+            message.value = "Beim letzten Versuch wurde die App beim Erstellen beendet. Der schonende Modus ist jetzt an – " +
+                "bitte die App während des Erstellens geöffnet lassen."
+        }
+    }
 
     private fun thumb(bmp: Bitmap?): ImageBitmap? = bmp?.let {
         val s = min(1f, 200f / max(it.width, it.height))
@@ -726,7 +783,7 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
         try {
             r.setDataSource(app, uri)
             val dur = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-            val frame = r.getFrameAtTime(min(500_000L, dur * 500), MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            val frame = PromoRenderer.scaledFrame(r, min(500_000L, dur * 500), MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 400)
             val secs = (dur / 1000).toInt()
             return PromoScene(
                 kind = PromoSceneKind.CLIP, uri = uri, clipMs = dur,
@@ -903,7 +960,7 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
                 PromoSceneKind.CLIP -> MediaMetadataRetriever().let { r ->
                     try {
                         r.setDataSource(app, sc.uri)
-                        r.getFrameAtTime(min(1_000_000L, sc.clipMs * 500), MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                        PromoRenderer.scaledFrame(r, min(1_000_000L, sc.clipMs * 500), MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 768)
                     } finally {
                         runCatching { r.release() }
                     }
@@ -916,10 +973,17 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
     fun create() {
         val spec = spec()
         if (spec.scenes.isEmpty() || progress.value != null) return
+        val safe = safeMode.value
         viewModelScope.launch {
             progress.value = 0f
+            runCatching {
+                runningMarker.writeText(
+                    "${spec.format.label}, ${spec.scenes.size} Szenen, davon ${spec.scenes.count { it.kind == PromoSceneKind.CLIP }} Clips" +
+                        (if (safe) ", schonend" else "") + (if (music.value != null) ", mit Musik" else "")
+                )
+            }
             try {
-                val video = PromoRenderer.render(app, spec) { progress.value = it * 0.92f }
+                val video = PromoRenderer.render(app, spec, safe) { progress.value = it * 0.92f }
                 val audio = music.value
                 result.value = if (audio != null) {
                     runCatching { AudioMixer.addMusic(app, video, audio) }.getOrElse { e ->
@@ -932,11 +996,17 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
                 progress.value = 1f
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: Exception) {
+            } catch (e: OutOfMemoryError) {
+                ErrorLog.log("Werbevideo", e)
+                safeMode.value = true
+                message.value = "Zu wenig Arbeitsspeicher. Der schonende Modus ist jetzt an – bitte erneut erstellen " +
+                    "(oder weniger bzw. kürzere Clips verwenden)."
+            } catch (e: Throwable) {
                 ErrorLog.log("Werbevideo", e)
                 message.value = "Werbevideo konnte nicht erstellt werden: ${e.message ?: e.javaClass.simpleName}"
             } finally {
                 progress.value = null
+                runningMarker.delete()
             }
         }
     }
@@ -976,6 +1046,15 @@ fun PromoVideoScreen(vm: PromoVideoViewModel, onBack: () -> Unit, modifier: Modi
     val progress by vm.progress.collectAsStateWithLifecycle()
     val result by vm.result.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val safeMode by vm.safeMode.collectAsStateWithLifecycle()
+
+    // Während des Erstellens Bildschirm anlassen – sonst kann Android die App im Hintergrund beenden.
+    val view = androidx.compose.ui.platform.LocalView.current
+    val rendering = progress != null
+    androidx.compose.runtime.DisposableEffect(rendering) {
+        view.keepScreenOn = rendering
+        onDispose { view.keepScreenOn = false }
+    }
 
     val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(PromoRenderer.MAX_SCENES)) { vm.addMedia(it) }
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { vm.addFiles(it) }
@@ -1139,6 +1218,22 @@ fun PromoVideoScreen(vm: PromoVideoViewModel, onBack: () -> Unit, modifier: Modi
                         Text(musicName ?: "", style = MaterialTheme.typography.labelSmall, maxLines = 1, modifier = Modifier.weight(1f))
                         IconButton(onClick = { vm.setMusic(null) }) { Icon(Icons.Filled.Close, "Musik entfernen") }
                     }
+                }
+            }
+
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Schonender Modus", style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            "Für ältere Handys oder viele Clips: etwas kleinere Auflösung, Clips mit weniger Einzelbildern.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = safeMode, onCheckedChange = { vm.safeMode.value = it }, enabled = !busy,
+                        modifier = Modifier.semantics { contentDescription = "Schonender Modus" },
+                    )
                 }
             }
 
