@@ -43,6 +43,8 @@ data class ChatUiState(
     val codeRun: Boolean = false,
     /** Gründlich nachdenken: Reasoning-Modell (Magistral) statt des normalen Chat-Modells. */
     val thinking: Boolean = false,
+    /** Bild erzeugen: die KI malt zur nächsten Nachricht ein Bild (sonst automatisch bei „Erstelle ein Bild …“). */
+    val imageGen: Boolean = false,
 )
 
 class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
@@ -111,7 +113,7 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun toggleWebSearch() = _state.update {
         val on = !it.webSearch
-        it.copy(webSearch = on, codeRun = if (on) false else it.codeRun, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
+        it.copy(webSearch = on, codeRun = if (on) false else it.codeRun, imageGen = if (on) false else it.imageGen, notice = if (on) "Websuche an – Antworten mit aktuellen Quellen" else "Websuche aus")
     }
 
     fun toggleThinking() = _state.update {
@@ -127,8 +129,14 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
 
     fun toggleCodeRun() = _state.update {
         val on = !it.codeRun
-        it.copy(codeRun = on, webSearch = if (on) false else it.webSearch,
+        it.copy(codeRun = on, webSearch = if (on) false else it.webSearch, imageGen = if (on) false else it.imageGen,
             notice = if (on) "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" else "Code ausführen aus")
+    }
+
+    fun toggleImageGen() = _state.update {
+        val on = !it.imageGen
+        it.copy(imageGen = on, webSearch = if (on) false else it.webSearch, codeRun = if (on) false else it.codeRun,
+            notice = if (on) "Bild erzeugen an – beschreibe, was die KI malen soll" else "Bild erzeugen aus")
     }
 
     fun reportError(message: String) = _state.update { it.copy(error = message) }
@@ -267,7 +275,19 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
             var lastUiUpdate = 0L
             try {
                 val project = app.projects.byId(base.projectId)
-                if (_state.value.codeRun && mode == ChatMode.CHAT && images.isEmpty()) {
+                val wantsImage = mode == ChatMode.CHAT && !_state.value.codeRun && !_state.value.webSearch &&
+                    (_state.value.imageGen || looksLikeImageRequest(userMessage.text))
+                if (wantsImage) {
+                    // Bild erzeugen: Mistral formuliert aus Wunsch + Verlauf einen Bild-Prompt, dann malt der Bildgenerator
+                    fun progress(t: String) = _state.update { st ->
+                        val conv = st.current ?: return@update st
+                        if (conv.id != conversation.id) return@update st
+                        st.copy(current = conv.copy(messages = conv.messages.map { if (it.id == assistant.id) it.copy(text = t) else it }))
+                    }
+                    val result = createImage(settings, history, images, ::progress)
+                    answer.append(result.first)
+                    answerImages = result.second
+                } else if (_state.value.codeRun && mode == ChatMode.CHAT && images.isEmpty()) {
                     // Code-Interpreter: echte Berechnung in Python, Ergebnis + Code + Diagramme
                     val memoryText = if (settings.memoryEnabled) app.memory.systemText() else ""
                     val instructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, " +
@@ -361,6 +381,88 @@ class ChatViewModel(private val app: KiApp, val mode: ChatMode) : ViewModel() {
                 }
             }
         }
+    }
+
+    /** Erkennt Bildwünsche wie „Erstelle ein Bild von …“, „Zeichne eine Katze“, „Kannst du mir ein Logo malen?“. */
+    private fun looksLikeImageRequest(text: String): Boolean = ImageRequest.matches(text)
+
+    /**
+     * Erzeugt ein Bild zur letzten Nachricht. Liefert Antworttext (Bildunterschrift, Prompt, Anbieter) und Dateipfade.
+     * Mit angehängtem Foto: gesichtstreue Bearbeitung (FLUX Kontext, falls BFL-Schlüssel) oder Foto als Vorlage beschreiben.
+     */
+    private suspend fun createImage(
+        settings: eu.kigenc.app.data.AppSettings,
+        history: List<ChatMessage>,
+        images: List<String>,
+        progress: (String) -> Unit,
+    ): Pair<String, List<String>> {
+        val gen = eu.kigenc.app.ai.ImageGenerator
+        val wish = history.last().text
+        progress("_Bildidee wird ausgearbeitet …_")
+        val faithful = images.isNotEmpty() && gen.canEditFaithfully(settings)
+        var vorlage = ""
+        if (images.isNotEmpty() && !faithful) {
+            progress("_Die KI sieht sich dein Foto an …_")
+            vorlage = runCatching {
+                gen.describeImages(
+                    app, settings,
+                    "Beschreibe dieses Bild präzise als Bild-Prompt auf Englisch: Motive, bei Personen Gesicht, Haare, Alter, " +
+                        "Kleidung, Pose; Umgebung, Licht, Farben, Stil. Nur die Beschreibung.",
+                    images.take(4).mapNotNull(ImageUtils::toDataUrl),
+                )
+            }.getOrDefault("")
+        }
+        // Zusammenhang: die letzten Nachrichten (für „mach es blauer“ usw.)
+        val context = history.dropLast(1).filterNot { it.isError }.takeLast(6).joinToString("\n") {
+            (if (it.role == Role.USER) "Nutzer: " else "KI: ") + it.text.take(800)
+        }
+        val instruction = buildString {
+            append("Du erstellst Bild-Prompts für einen Bildgenerator (FLUX). Antworte NUR als JSON-Objekt mit den Feldern ")
+            append("\"prompt\" (detaillierter englischer Bild-Prompt: Motiv, Stil, Licht, Farben, Perspektive, Komposition; max. 120 Wörter; ")
+            append("Texte im Bild nur wenn ausdrücklich gewünscht, dann wörtlich in Anführungszeichen), ")
+            append("\"caption\" (ein kurzer deutscher Satz, was das Bild zeigt) und ")
+            append("\"aspect\" (eines von \"1:1\", \"3:4\", \"4:3\", \"9:16\", \"16:9\" – passend zum Wunsch, z. B. Hochformat fürs Handy, Querformat für Landschaften). ")
+            append("Bezieht sich der Wunsch auf ein vorheriges Bild (z. B. „mach es blauer“, „jetzt im Comic-Stil“), übernimm dessen Prompt aus dem Verlauf und ändere nur das Gewünschte. ")
+            append("Keine realen, bekannten Personen und keine geschützten Figuren oder Markenlogos nachbilden.")
+            if (context.isNotBlank()) append("\n\nBisheriger Verlauf:\n").append(context)
+            if (vorlage.isNotBlank()) append("\n\nAngehängtes Foto als Vorlage (Beschreibung): ").append(vorlage)
+            append("\n\nWunsch des Nutzers: ").append(wish)
+        }
+        var prompt = wish
+        var caption = ""
+        var aspect = "1:1"
+        val planModel = if (settings.chatModel.contains("magistral") || settings.chatModel.contains("codestral")) eu.kigenc.app.ai.MistralClient.FALLBACK_MODEL else settings.chatModel
+        runCatching {
+            val raw = app.mistral.complete(settings.apiKey, planModel, listOf(ApiMessage("user", instruction)), json = true, temperature = 0.6)
+            val o = org.json.JSONObject(raw.substring(raw.indexOf('{').coerceAtLeast(0), raw.lastIndexOf('}') + 1))
+            o.optString("prompt").takeIf { it.isNotBlank() }?.let { prompt = it.trim() }
+            caption = o.optString("caption").trim()
+            aspect = o.optString("aspect").ifBlank { "1:1" }
+        }.onFailure { if (it is CancellationException) throw it }
+        val (aw, ah) = aspect.split(':').mapNotNull { it.trim().toIntOrNull() }.takeIf { it.size == 2 }?.let { it[0] to it[1] } ?: (1 to 1)
+        val files: List<java.io.File> = if (faithful) {
+            progress("_Dein Foto wird gesichtstreu bearbeitet (FLUX Kontext) …_")
+            val first = images.first()
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(first, bounds)
+            val extra = images.drop(1).take(3).mapNotNull { ImageUtils.toDataUrl(it)?.substringAfter("base64,") }
+            listOf(
+                gen.editFaithfully(
+                    app, settings, ImageUtils.toDataUrl(first)?.substringAfter("base64,") ?: error("Foto nicht lesbar"),
+                    bounds.outWidth, bounds.outHeight, wish, extra,
+                )
+            )
+        } else {
+            progress("_Das Bild wird gemalt …_")
+            val (w, h) = gen.sizeFor(aw, ah)
+            gen.generate(app, settings, prompt, w, h)
+        }
+        val text = buildString {
+            append(caption.ifBlank { "Hier ist dein Bild." })
+            if (!faithful) append("\n\n_Prompt: ").append(prompt.replace("_", " ")).append("_")
+            append("\n\n_Erzeugt mit ").append(gen.lastProvider).append(" – antippen zum Teilen oder Speichern._")
+        }
+        return text to files.map { it.absolutePath }
     }
 
     private fun buildApiMessages(history: List<ChatMessage>, project: eu.kigenc.app.data.Project? = null, memory: String = ""): List<ApiMessage> {

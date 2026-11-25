@@ -16,6 +16,8 @@ final class ChatModel: ObservableObject {
     @Published var codeRun = false
     /// Gründlich nachdenken: Reasoning-Modell (Magistral) statt des normalen Chat-Modells.
     @Published var thinking = false
+    /// Bild erzeugen: die KI malt zur nächsten Nachricht ein Bild (sonst automatisch bei „Erstelle ein Bild …“).
+    @Published var imageGen = false
     private var task: Task<Void, Never>?
 
     static let system = """
@@ -85,6 +87,8 @@ final class ChatModel: ObservableObject {
         busy = true
         let baseModel = images.isEmpty ? settings.chatModel : (settings.chatModel.contains("ministral") || settings.chatModel.contains("magistral") ? "mistral-small-latest" : settings.chatModel)
         let model = thinking && !codeRun && !webSearch && images.isEmpty ? "magistral-medium-latest" : baseModel
+        let useImage = !codeRun && !webSearch && (imageGen || ImageRequest.matches(shown))
+        let imageContext = Array(history)
         let useCode = codeRun && images.isEmpty
         let useWeb = !useCode && webSearch && images.isEmpty && extra.isEmpty
         let codeInstructions = "Du bist KI-GenC. Antworte auf Deutsch in Markdown. Nutze für Berechnungen, Statistik, Datenanalyse und Diagramme IMMER das Werkzeug code_interpreter (Python) und erkläre das Ergebnis verständlich. Diagramme mit matplotlib, Beschriftungen auf Deutsch." + style + memoryText + String(projectText.prefix(8_000))
@@ -92,7 +96,14 @@ final class ChatModel: ObservableObject {
         let webQuestion = useWeb ? Self.webQuestion(history: Array(history), question: shown, extras: style + memoryText + String(projectText.prefix(8_000))) : ""
         task = Task {
             do {
-                if useCode {
+                if useImage {
+                    // Bild erzeugen: Mistral formuliert aus Wunsch + Verlauf einen Bild-Prompt, dann malt der Bildgenerator
+                    let (t, img) = try await Self.createImage(wish: shown, history: imageContext, images: images, settings: settings) { status in
+                        self.conversation.messages[index].text = status
+                    }
+                    conversation.messages[index].text = t
+                    conversation.messages[index].images = [img]
+                } else if useCode {
                     // Code-Interpreter: echte Berechnung in Python, Ergebnis + Code + Diagramme
                     var run: MistralClient.CodeRun
                     do {
@@ -131,6 +142,63 @@ final class ChatModel: ObservableObject {
             conversation.updated = Date()
             ConversationStore.shared.upsert(conversation)
         }
+    }
+
+    /// Erzeugt ein Bild zur Nachricht. Liefert Antworttext (Bildunterschrift, Prompt, Anbieter) und das Bild als Data-URL.
+    /// Mit angehängtem Foto: gesichtstreue Bearbeitung (FLUX Kontext, falls BFL-Schlüssel) oder Foto als Vorlage beschreiben.
+    private static func createImage(wish: String, history: [ChatMessage], images: [String], settings: AppSettings,
+                                    progress: @escaping (String) -> Void) async throws -> (String, String) {
+        progress("_Bildidee wird ausgearbeitet …_")
+        let photos = images.compactMap { MessageRow.image(from: $0) }
+        let faithful = !photos.isEmpty && settings.canEditFaithfully
+        var vorlage = ""
+        if !photos.isEmpty && !faithful {
+            progress("_Die KI sieht sich dein Foto an …_")
+            vorlage = (try? await MistralClient.shared.complete(key: settings.key, model: "mistral-small-latest", messages: [
+                ApiMessage(role: "user", text: "Beschreibe dieses Bild präzise als Bild-Prompt auf Englisch: Motive, bei Personen Gesicht, Haare, Alter, Kleidung, Pose; Umgebung, Licht, Farben, Stil. Nur die Beschreibung.",
+                           images: Array(images.prefix(4))),
+            ])) ?? ""
+        }
+        let context = history.filter { !$0.isError }.suffix(6).map { ($0.role == "user" ? "Nutzer: " : "KI: ") + String($0.text.prefix(800)) }.joined(separator: "\n")
+        var instruction = """
+        Du erstellst Bild-Prompts für einen Bildgenerator (FLUX). Antworte NUR als JSON-Objekt mit den Feldern \
+        "prompt" (detaillierter englischer Bild-Prompt: Motiv, Stil, Licht, Farben, Perspektive, Komposition; max. 120 Wörter; \
+        Texte im Bild nur wenn ausdrücklich gewünscht, dann wörtlich in Anführungszeichen), \
+        "caption" (ein kurzer deutscher Satz, was das Bild zeigt) und \
+        "aspect" (eines von "1:1", "3:4", "4:3", "9:16", "16:9" – passend zum Wunsch, z. B. Hochformat fürs Handy, Querformat für Landschaften). \
+        Bezieht sich der Wunsch auf ein vorheriges Bild (z. B. „mach es blauer“, „jetzt im Comic-Stil“), übernimm dessen Prompt aus dem Verlauf und ändere nur das Gewünschte. \
+        Keine realen, bekannten Personen und keine geschützten Figuren oder Markenlogos nachbilden.
+        """
+        if !context.isEmpty { instruction += "\n\nBisheriger Verlauf:\n" + context }
+        if !vorlage.isEmpty { instruction += "\n\nAngehängtes Foto als Vorlage (Beschreibung): " + vorlage }
+        instruction += "\n\nWunsch des Nutzers: " + wish
+        var prompt = wish, caption = "", aspect = 1.0
+        let planModel = settings.chatModel.contains("magistral") || settings.chatModel.contains("codestral") ? MistralClient.fallbackModel : settings.chatModel
+        if let raw = try? await MistralClient.shared.complete(key: settings.key, model: planModel, messages: [ApiMessage(role: "user", text: instruction)], json: true, temperature: 0.6),
+           let a = raw.firstIndex(of: "{"), let b = raw.lastIndex(of: "}"),
+           let o = try? JSONSerialization.jsonObject(with: Data(raw[a...b].utf8)) as? [String: Any] {
+            if let p = o["prompt"] as? String, !p.trimmingCharacters(in: .whitespaces).isEmpty { prompt = p }
+            caption = (o["caption"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let parts = (o["aspect"] as? String ?? "1:1").split(separator: ":").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+            if parts.count == 2, parts[1] > 0 { aspect = parts[0] / parts[1] }
+        }
+        try Task.checkCancellation()
+        let data: Data, provider: String
+        if faithful {
+            progress("_Dein Foto wird gesichtstreu bearbeitet (FLUX Kontext) …_")
+            data = try await ImageService.editFaithfully(key: settings.effectiveBflKey, instruction: wish, images: photos)
+            provider = "FLUX Kontext (gesichtstreu)"
+        } else {
+            progress("_Das Bild wird gemalt …_")
+            let r = try await ImageService.generate(prompt: prompt, aspect: aspect, settings: settings)
+            data = r.0
+            provider = r.1
+        }
+        guard let url = UIImage(data: data)?.dataURL else { throw APIError(code: 0, message: "Es wurde kein Bild erzeugt.") }
+        var text = caption.isEmpty ? "Hier ist dein Bild." : caption
+        if !faithful { text += "\n\n_Prompt: " + prompt.replacingOccurrences(of: "_", with: " ") + "_" }
+        text += "\n\n_Erzeugt mit \(provider) – lange drücken zum Teilen oder Sichern._"
+        return (text, url)
     }
 
     func stop() {
@@ -348,7 +416,7 @@ struct ChatView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
                 }
-                ForEach(["Erkläre mir Quantencomputer in einfachen Worten", "Schreibe eine freundliche Absage-E-Mail", "Plane mir eine Woche gesunde Ernährung", "Was ist auf diesem Foto zu sehen?"], id: \.self) { s in
+                ForEach(["Erkläre mir Quantencomputer in einfachen Worten", "Schreibe eine freundliche Absage-E-Mail", "Plane mir eine Woche gesunde Ernährung", "Erstelle ein Bild von einem Leuchtturm bei Sonnenuntergang im Aquarell-Stil", "Was ist auf diesem Foto zu sehen?"], id: \.self) { s in
                     Button { model.input = s; focused = true } label: {
                         Text(s).frame(maxWidth: .infinity, alignment: .leading).foregroundStyle(Theme.text)
                     }
@@ -408,12 +476,13 @@ struct ChatView: View {
             if dictation.listening {
                 Text(dictation.transcript.isEmpty ? "Ich höre zu …" : dictation.transcript).font(.callout).foregroundStyle(Theme.cyan)
             }
-            if model.webSearch || model.codeRun || model.thinking {
+            if model.webSearch || model.codeRun || model.thinking || model.imageGen {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         if model.webSearch { modeChip("Websuche", "globe") { model.webSearch = false } }
                         if model.codeRun { modeChip("Code ausführen", "function") { model.codeRun = false } }
                         if model.thinking { modeChip("Gründlich nachdenken", "brain") { model.thinking = false } }
+                        if model.imageGen { modeChip("Bild erzeugen", "paintbrush") { model.imageGen = false } }
                     }
                 }
             }
@@ -425,17 +494,21 @@ struct ChatView: View {
                 // Werkzeuge wie bei Claude: Websuche, Code ausführen, Gründlich nachdenken, Antwortstil
                 Menu {
                     Toggle(isOn: Binding(get: { model.webSearch }, set: { on in
-                        model.webSearch = on; if on { model.codeRun = false }
+                        model.webSearch = on; if on { model.codeRun = false; model.imageGen = false }
                         model.notice = on ? "Websuche an – Antworten mit aktuellen Quellen" : "Websuche aus"
                     })) { Label("Websuche", systemImage: "globe") }
                     Toggle(isOn: Binding(get: { model.codeRun }, set: { on in
-                        model.codeRun = on; if on { model.webSearch = false }
+                        model.codeRun = on; if on { model.webSearch = false; model.imageGen = false }
                         model.notice = on ? "Code ausführen an – die KI rechnet mit echtem Python-Code (auch Diagramme)" : "Code ausführen aus"
                     })) { Label("Code ausführen", systemImage: "function") }
                     Toggle(isOn: Binding(get: { model.thinking }, set: { on in
                         model.thinking = on
                         model.notice = on ? "Gründlich nachdenken an – Antworten dauern etwas länger" : "Gründlich nachdenken aus"
                     })) { Label("Gründlich nachdenken", systemImage: "brain") }
+                    Toggle(isOn: Binding(get: { model.imageGen }, set: { on in
+                        model.imageGen = on; if on { model.webSearch = false; model.codeRun = false }
+                        model.notice = on ? "Bild erzeugen an – beschreibe, was die KI malen soll" : "Bild erzeugen aus"
+                    })) { Label("Bild erzeugen", systemImage: "paintbrush") }
                     Picker(selection: Binding(get: { settings.answerStyle }, set: { id in
                         settings.answerStyle = id
                         model.notice = "Antwortstil: \(AppSettings.answerStyles.first { $0.id == id }?.name ?? "Normal")"
@@ -445,10 +518,10 @@ struct ChatView: View {
                     .pickerStyle(.menu)
                 } label: {
                     Image(systemName: "slider.horizontal.3").font(.title2)
-                        .foregroundStyle(model.webSearch || model.codeRun || model.thinking || settings.answerStyle != "normal" ? Theme.cyan : Theme.secondaryText)
+                        .foregroundStyle(model.webSearch || model.codeRun || model.thinking || model.imageGen || settings.answerStyle != "normal" ? Theme.cyan : Theme.secondaryText)
                 }
-                .accessibilityLabel("Werkzeuge: Websuche, Code ausführen, Nachdenken, Antwortstil")
-                TextField(model.webSearch ? "Frag mit Websuche …" : model.codeRun ? "Rechnen, auswerten, Diagramm …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
+                .accessibilityLabel("Werkzeuge: Websuche, Code ausführen, Nachdenken, Bild erzeugen, Antwortstil")
+                TextField(model.imageGen ? "Beschreibe dein Bild …" : model.webSearch ? "Frag mit Websuche …" : model.codeRun ? "Rechnen, auswerten, Diagramm …" : "Nachricht an KI-GenC …", text: $model.input, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .padding(.leading, 12).padding(.trailing, model.input.isEmpty ? 40 : 12).padding(.vertical, 9)
@@ -695,7 +768,25 @@ struct MessageRow: View {
             HStack {
                 if message.role == "user" { Spacer(minLength: 40) }
                 VStack(alignment: .leading, spacing: 8) {
-                    if !message.images.isEmpty {
+                    if !message.images.isEmpty && message.role == "assistant" {
+                        // Von der KI erzeugte Bilder (Bild erzeugen, Diagramme) groß anzeigen
+                        ForEach(Array(message.images.enumerated()), id: \.offset) { i, url in
+                            if let img = Self.image(from: url) {
+                                Image(uiImage: img).resizable().scaledToFit()
+                                    .frame(maxWidth: 420)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                                    .accessibilityLabel("Bild \(i + 1) – lange drücken zum Teilen oder Sichern")
+                                    .contextMenu {
+                                        ShareLink(item: Image(uiImage: img), preview: SharePreview("KI-GenC Bild", image: Image(uiImage: img))) {
+                                            Label("Teilen", systemImage: "square.and.arrow.up")
+                                        }
+                                        Button { UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil) } label: {
+                                            Label("In Fotos sichern", systemImage: "square.and.arrow.down")
+                                        }
+                                    }
+                            }
+                        }
+                    } else if !message.images.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack {
                                 ForEach(Array(message.images.enumerated()), id: \.offset) { _, url in

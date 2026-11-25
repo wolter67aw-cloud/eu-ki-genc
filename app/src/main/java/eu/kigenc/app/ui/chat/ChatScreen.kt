@@ -64,6 +64,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PhotoCamera
@@ -322,6 +323,8 @@ fun ChatScreen(
                 onToggleCode = vm::toggleCodeRun,
                 thinking = state.thinking,
                 onToggleThinking = vm::toggleThinking,
+                imageGen = !isCode && state.imageGen,
+                onToggleImage = vm::toggleImageGen,
                 answerStyle = settings?.answerStyle ?: "normal",
                 onAnswerStyle = vm::setAnswerStyle,
                 streaming = state.streaming,
@@ -587,6 +590,7 @@ private fun EmptyState(
     ) else listOf(
         "Erkläre mir den AI Act der EU in einfachen Worten",
         "Plane mir ein Wochenende in Wien",
+        "Erstelle ein Bild von einem Leuchtturm bei Sonnenuntergang im Aquarell-Stil",
         "Hilf mir, eine Bewerbung zu formulieren",
         "Was kann ich heute Abend kochen? Ich habe Nudeln und Tomaten.",
         "Fasse mir die Vor- und Nachteile von Wärmepumpen zusammen",
@@ -776,7 +780,7 @@ private fun MessageItem(
                         val bmp = remember(path) { BitmapFactory.decodeFile(path)?.asImageBitmap() }
                         if (bmp != null) {
                             Image(
-                                bmp, contentDescription = "Diagramm ${i + 1}",
+                                bmp, contentDescription = "Bild ${i + 1} – antippen zum Teilen oder Speichern",
                                 contentScale = ContentScale.Fit,
                                 modifier = Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
                                     .clickable { context.shareImage(File(path)) }
@@ -830,6 +834,8 @@ private fun InputBar(
     onToggleCode: () -> Unit,
     thinking: Boolean,
     onToggleThinking: () -> Unit,
+    imageGen: Boolean,
+    onToggleImage: () -> Unit,
     answerStyle: String,
     onAnswerStyle: (String) -> Unit,
     streaming: Boolean,
@@ -883,11 +889,12 @@ private fun InputBar(
                     )
                 }
             }
-            if (webSearch == true || codeRun == true || thinking) {
+            if (webSearch == true || codeRun == true || thinking || imageGen) {
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 4.dp)) {
                     if (webSearch == true) item { ModeChip("Websuche", Icons.Outlined.Language, onToggleWeb) }
                     if (codeRun == true) item { ModeChip("Code ausführen", Icons.Outlined.Calculate, onToggleCode) }
                     if (thinking) item { ModeChip("Gründlich nachdenken", Icons.Outlined.Psychology, onToggleThinking) }
+                    if (imageGen) item { ModeChip("Bild erzeugen", Icons.Outlined.Brush, onToggleImage) }
                 }
             }
             Row(verticalAlignment = Alignment.Bottom) {
@@ -914,12 +921,12 @@ private fun InputBar(
                 if (codeRun != null && webSearch != null) {
                     // Werkzeuge wie bei Claude: Websuche, Code ausführen, Gründlich nachdenken, Antwortstil
                     var tools by remember { mutableStateOf(false) }
-                    val active = webSearch || codeRun || thinking || answerStyle != "normal"
+                    val active = webSearch || codeRun || thinking || imageGen || answerStyle != "normal"
                     Box {
                         IconButton(onClick = { tools = true }) {
                             Icon(
                                 Icons.Outlined.Tune,
-                                contentDescription = "Werkzeuge: Websuche, Code ausführen, Nachdenken, Antwortstil",
+                                contentDescription = "Werkzeuge: Websuche, Code ausführen, Nachdenken, Bild erzeugen, Antwortstil",
                                 tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -927,6 +934,7 @@ private fun InputBar(
                             ToolToggleItem("Websuche", "Aktuelle Infos mit Quellen", Icons.Outlined.Language, webSearch) { onToggleWeb(); tools = false }
                             ToolToggleItem("Code ausführen", "Rechnen, Daten, Diagramme", Icons.Outlined.Calculate, codeRun) { onToggleCode(); tools = false }
                             ToolToggleItem("Gründlich nachdenken", "Magistral – langsamer, sorgfältiger", Icons.Outlined.Psychology, thinking) { onToggleThinking(); tools = false }
+                            ToolToggleItem("Bild erzeugen", "Die KI malt, was du beschreibst", Icons.Outlined.Brush, imageGen) { onToggleImage(); tools = false }
                             androidx.compose.material3.HorizontalDivider()
                             Text("Antwortstil", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
                             eu.kigenc.app.data.ANSWER_STYLES.forEach { (id, label, _) ->
@@ -945,6 +953,7 @@ private fun InputBar(
                     placeholder = {
                         Text(
                             when {
+                                imageGen -> "Beschreibe dein Bild …"
                                 webSearch == true -> "Frag mit Websuche …"
                                 codeRun == true -> "Rechnen, auswerten, Diagramm …"
                                 else -> placeholder
