@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AddPhotoAlternate
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Collections
 import androidx.compose.material.icons.outlined.Description
@@ -536,6 +537,7 @@ private fun AttachmentPickers(
     val mixedMulti = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(10)) { onPicked(null, it) }
     val filesMulti = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { onPicked(AttachmentKind.FILE, it) }
     val photoSingle = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> onPicked(AttachmentKind.PHOTO, listOf(u)) } }
+    val takePhoto = eu.kigenc.app.ui.components.rememberTakePhoto { u -> onPicked(AttachmentKind.PHOTO, listOf(u)) }
     val videoSingle = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { it?.let { u -> onPicked(AttachmentKind.VIDEO, listOf(u)) } }
     val fileTypes = arrayOf(
         "application/pdf", "text/*", "application/json",
@@ -570,6 +572,14 @@ private fun AttachmentPickers(
                         null, Modifier.size(18.dp)
                     )
                 }
+            )
+        }
+        if (AttachmentKind.PHOTO in kinds) {
+            AssistChip(
+                onClick = takePhoto,
+                enabled = !busy,
+                label = { Text(labelPrefix + "Kamera") },
+                leadingIcon = { Icon(Icons.Outlined.PhotoCamera, null, Modifier.size(18.dp)) }
             )
         }
         if (multiple) {

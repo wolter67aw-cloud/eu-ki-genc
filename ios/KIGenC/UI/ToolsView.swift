@@ -50,7 +50,9 @@ struct ToolsView: View {
 
 struct PhotoEditorView: View {
     @EnvironmentObject private var settings: AppSettings
+    @EnvironmentObject private var session: SessionController
     @State private var picks: [PhotosPickerItem] = []
+    @State private var showCamera = false
     @State private var photos: [UIImage] = []
     @State private var current = 0
     @State private var useAll = true
@@ -72,10 +74,16 @@ struct PhotoEditorView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 14) {
-                PhotosPicker(selection: $picks, maxSelectionCount: max(1, 10 - photos.count), matching: .images) {
-                    Label(photos.isEmpty ? "Fotos auswählen (auch mehrere)" : "Weitere Fotos (\(photos.count)/10)", systemImage: "photo.on.rectangle")
+                HStack {
+                    PhotosPicker(selection: $picks, maxSelectionCount: max(1, 10 - photos.count), matching: .images) {
+                        Label(photos.isEmpty ? "Fotos auswählen" : "Weitere Fotos (\(photos.count)/10)", systemImage: "photo.on.rectangle")
+                    }
+                    .buttonStyle(.borderedProminent).tint(Theme.blue)
+                    Button { session.externalPickerActive = true; showCamera = true } label: {
+                        Label("Kamera", systemImage: "camera")
+                    }
+                    .buttonStyle(.bordered).tint(Theme.cyan)
                 }
-                .buttonStyle(.borderedProminent).tint(Theme.blue)
                 .disabled(photos.count >= 10)
 
                 if photos.count > 1 {
@@ -188,6 +196,18 @@ struct PhotoEditorView: View {
         .onChange(of: contrast) { _, _ in apply() }
         .onChange(of: saturation) { _, _ in apply() }
         .onChange(of: preset) { _, _ in apply() }
+        .fullScreenCover(isPresented: $showCamera, onDismiss: { session.externalPickerActive = false }) {
+            CameraPicker { img in
+                guard let img, photos.count < 10 else { return }
+                // Ausrichtung der Kamera fest einrechnen (Filter arbeiten auf den reinen Bilddaten)
+                let format = UIGraphicsImageRendererFormat()
+                format.scale = 1
+                let upright = UIGraphicsImageRenderer(size: img.size, format: format).image { _ in img.draw(at: .zero) }
+                photos.append(upright.scaled(maxSide: 2048))
+                select(photos.count - 1)
+            }
+            .ignoresSafeArea()
+        }
     }
 
     private func slider(_ title: String, _ value: Binding<Double>, _ range: ClosedRange<Double>) -> some View {

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.RotateRight
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Share
@@ -452,6 +453,7 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     val adjust = PhotoAdjust(brightness, contrast, saturation, warmth, filter)
 
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PHOTOS)) { uris -> vm.loadMany(uris) }
+    val takePhoto = eu.kigenc.app.ui.components.rememberTakePhoto(onError = { vm.message.value = it }) { uri -> vm.loadMany(listOf(uri)) }
     fun reset() {
         brightness = 0f; contrast = 1f; saturation = 1f; warmth = 0f; filter = PhotoFilter.NONE
     }
@@ -459,13 +461,21 @@ fun PhotoEditorScreen(vm: PhotoEditorViewModel, onBack: () -> Unit, modifier: Mo
     ToolScaffold("Foto-Editor", onBack, modifier, message, vm::clearMessage) { inner ->
         LazyColumn(state = listState, contentPadding = toolPadding(inner), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
             item {
-                OutlinedButton(
-                    onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.PhotoLibrary, null)
-                    Spacer(Modifier.size(8.dp))
-                    Text(if (sources.isEmpty()) "Fotos auswählen (auch mehrere)" else "Weitere Fotos hinzufügen (${sources.size}/$MAX_PHOTOS)")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = { pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        enabled = sources.size < MAX_PHOTOS,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.PhotoLibrary, null)
+                        Spacer(Modifier.size(8.dp))
+                        Text(if (sources.isEmpty()) "Fotos auswählen" else "Weitere Fotos (${sources.size}/$MAX_PHOTOS)")
+                    }
+                    OutlinedButton(onClick = takePhoto, enabled = sources.size < MAX_PHOTOS) {
+                        Icon(Icons.Outlined.PhotoCamera, null)
+                        Spacer(Modifier.size(8.dp))
+                        Text("Kamera")
+                    }
                 }
             }
             if (sources.size > 1) {
