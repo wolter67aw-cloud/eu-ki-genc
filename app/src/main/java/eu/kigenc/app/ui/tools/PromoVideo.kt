@@ -746,9 +746,20 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
         }
     }
 
+    /**
+     * Vorschaubild als EIGENES Bitmap (neu gezeichnet). Bitmap.createScaledBitmap kann das Ausgangsbild selbst
+     * zurückgeben – das wird danach freigegeben (recycle), und die Oberfläche stürzte beim Zeichnen ab
+     * („Canvas: trying to use a recycled bitmap“).
+     */
     private fun thumb(bmp: Bitmap?): ImageBitmap? = bmp?.let {
+        if (it.isRecycled || it.width <= 0 || it.height <= 0) return@let null
         val s = min(1f, 200f / max(it.width, it.height))
-        Bitmap.createScaledBitmap(it, max(1, (it.width * s).roundToInt()), max(1, (it.height * s).roundToInt()), true).asImageBitmap()
+        val tw = max(1, (it.width * s).roundToInt())
+        val th = max(1, (it.height * s).roundToInt())
+        val out = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888)
+        Canvas(out).drawBitmap(it, null, android.graphics.Rect(0, 0, tw, th), Paint(Paint.FILTER_BITMAP_FLAG))
+        out.prepareToDraw()
+        out.asImageBitmap()
     }
 
     private fun room(): Int = PromoRenderer.MAX_SCENES - scenes.value.size
