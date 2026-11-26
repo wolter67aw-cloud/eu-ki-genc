@@ -433,6 +433,11 @@ struct PromoVideoView: View {
     @State private var resultURL: URL?
     @State private var error: String?
     @State private var info: String?
+    /// Runway: Szenen, die gerade animiert werden (ID → Status), und Auftrags-Dialog.
+    @State private var animating: [UUID: String] = [:]
+    @State private var animateTarget: UUID?
+    @State private var motion = ""
+    @State private var animSeconds = 5
 
     private var endCard: PromoEndCard? {
         guard endOn, !(endName + endCta + endContact).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -577,6 +582,77 @@ struct PromoVideoView: View {
                 if (try? FileManager.default.copyItem(at: url, to: local)) != nil { musicURL = local }
             }
         })
+        .sheet(isPresented: Binding(get: { animateTarget != nil }, set: { if !$0 { animateTarget = nil } })) { runwaySheet }
+    }
+
+    /// Runway-Auftrag: Bewegung beschreiben, Länge wählen, Kosten sehen.
+    private var runwaySheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Runway (Gen-4 Turbo) macht aus dem Foto einen KI-Videoclip, der das Foto im Werbevideo ersetzt. Dauer meist 1–3 Minuten. Das Foto wird dafür an Runway (USA) übertragen.")
+                        .font(.callout)
+                }
+                Section("Bewegung (optional, am besten auf Englisch)") {
+                    TextField("z. B. slow zoom in, steam rising from the coffee", text: $motion, axis: .vertical).lineLimit(2...4)
+                }
+                Section {
+                    Picker("Länge", selection: $animSeconds) {
+                        Text("5 Sekunden").tag(5)
+                        Text("10 Sekunden").tag(10)
+                    }
+                    .pickerStyle(.segmented)
+                    let credits = animSeconds * RunwayService.creditsPerSecond
+                    Text("Kosten: \(credits) Runway-Credits (ca. \(String(format: "%.2f", Double(credits) / 100)) $) von deinem Runway-Guthaben – auch wenn Runway das Bild ablehnt.")
+                        .font(.caption).foregroundStyle(Theme.cyan)
+                }
+            }
+            .navigationTitle("Mit Runway animieren")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Abbrechen") { animateTarget = nil } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Animieren") {
+                        guard let id = animateTarget else { return }
+                        animateTarget = nil
+                        let m = motion, secs = animSeconds
+                        Task { await animate(id, motion: m, seconds: secs) }
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
+    /// Foto-Szene mit Runway zu einem KI-Videoclip animieren; der Clip ersetzt das Foto (Einblendung bleibt).
+    @MainActor
+    private func animate(_ id: UUID, motion: String, seconds: Int) async {
+        guard let idx = scenes.firstIndex(where: { $0.id == id }), case .image(let img, _) = scenes[idx].kind else { return }
+        let key = settings.runwayKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            error = "Bitte zuerst unter Optionen → Bilder deinen Runway-Schlüssel eintragen."
+            return
+        }
+        error = nil
+        animating[id] = "Wird gestartet …"
+        defer { animating[id] = nil }
+        do {
+            let url = try await RunwayService.imageToVideo(key: key, image: img, motion: motion, ratio: RunwayService.ratio(for: format.size), seconds: seconds) { s in
+                Task { @MainActor in if animating[id] != nil { animating[id] = s } }
+            }
+            let clip = await Self.clipScene(url)
+            if let k = scenes.firstIndex(where: { $0.id == id }) {
+                scenes[k].kind = clip.kind
+                scenes[k].thumb = clip.thumb
+                scenes[k].label = "Runway-" + clip.label
+                info = "Runway-Clip fertig – er ersetzt das Foto in Szene \(k + 1)."
+            }
+            if clipSeconds < Double(seconds) { clipSeconds = Double(seconds) }
+            resultURL = nil
+        } catch {
+            ErrorLog.report(error, context: "Runway")
+            self.error = friendly(error)
+        }
     }
 
     private func heading(_ text: String) -> some View {
@@ -603,6 +679,18 @@ struct PromoVideoView: View {
                 ), axis: .vertical)
                 .lineLimit(1...2)
                 .padding(8).background(Theme.cardHigh, in: RoundedRectangle(cornerRadius: 8))
+                if let status = animating[scene.id] {
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Runway: \(status)").font(.caption).foregroundStyle(Theme.cyan)
+                    }
+                } else if case .image(_, let fit) = scene.kind, !fit {
+                    Button { motion = ""; animSeconds = 5; animateTarget = scene.id } label: {
+                        Label("Mit Runway animieren", systemImage: "sparkles").font(.caption)
+                    }
+                    .buttonStyle(.borderless).tint(Theme.cyan)
+                    .disabled(progress != nil)
+                }
             }
             VStack(spacing: 6) {
                 Button { move(index, -1) } label: { Image(systemName: "chevron.up") }.disabled(index == 0)

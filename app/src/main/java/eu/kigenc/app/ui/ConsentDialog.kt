@@ -39,7 +39,7 @@ object AiConsent {
         "KI-GenC arbeitet mit künstlicher Intelligenz externer Anbieter. Wenn du eine KI-Funktion nutzt, werden " +
             "deine Eingaben – Texte, angehängte Fotos, Videos, Dateien und Sprachaufnahmen – an Mistral AI " +
             "(Paris, Rechenzentren in der EU) gesendet und dort verarbeitet. Für Bilder kann je nach Einstellung " +
-            "Pollinations.ai oder Black Forest Labs genutzt werden. Im kostenlosen Mistral-Tarif können Anfragen " +
+            "Pollinations.ai oder Black Forest Labs genutzt werden, für KI-Videoclips im Werbevideo Runway (USA, nur mit eigenem Schlüssel). Im kostenlosen Mistral-Tarif können Anfragen " +
             "zum Training der KI-Modelle verwendet werden.\n\n" +
             "Unterhaltungen, Bilder und Einstellungen bleiben auf deinem Gerät. Es gibt keine Werbung und kein Tracking.\n\n" +
             "Bitte gib keine sensiblen Daten wie Passwörter oder Gesundheitsdaten ein. " +

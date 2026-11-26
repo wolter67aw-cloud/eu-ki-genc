@@ -599,6 +599,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
     if (showImageProvider) {
         // Nur den eigenen Schlüssel zeigen – der Test-Schlüssel der Testversion bleibt verborgen
         var bflInput by remember { mutableStateOf(settings.ownBflKey) }
+        var runwayInput by remember { mutableStateOf(settings.runwayKey) }
         AlertDialog(
             onDismissRequest = { showImageProvider = false },
             title = { Text("Bildgenerator wählen") },
@@ -650,11 +651,29 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                         )
                         TextButton(onClick = { uri.openUri("https://dashboard.bfl.ai/") }) { Text("Schlüssel bei bfl.ai erstellen") }
                     }
+                    Text(
+                        "KI-Videoclips im Werbevideo: Mit einem Runway-Schlüssel lassen sich Fotos zu 5- oder 10-Sekunden-Clips " +
+                            "animieren (Gen-4 Turbo, ca. 0,25 \$ pro 5 s, Abrechnung über dein Runway-Guthaben). Das Foto wird dafür an " +
+                            "Runway (USA) übertragen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 12.dp)
+                    )
+                    OutlinedTextField(
+                        value = runwayInput, onValueChange = { runwayInput = it },
+                        label = { Text("Runway-Schlüssel (optional)") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
+                    TextButton(onClick = { uri.openUri("https://dev.runwayml.com/") }) { Text("Schlüssel bei dev.runwayml.com erstellen") }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    scope.launch { app.settings.setBflKey(bflInput) }
+                    scope.launch {
+                        app.settings.setBflKey(bflInput)
+                        app.settings.setRunwayKey(runwayInput)
+                    }
                     showImageProvider = false
                 }) { Text("Speichern") }
             }

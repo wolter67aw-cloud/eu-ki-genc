@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject private var memory = MemoryStore.shared
     @State private var keyInput = ""
     @State private var bflInput = ""
+    @State private var runwayInput = ""
     @State private var testStatus: String?
     @State private var testing = false
     @State private var showLog = false
@@ -123,7 +124,15 @@ struct SettingsView: View {
                         if settings.hasOwnBflKey { Button("Entfernen", role: .destructive) { settings.bflKey = "" } }
                     }
                     Link("Schlüssel holen (dashboard.bfl.ai)", destination: URL(string: "https://dashboard.bfl.ai")!).font(.callout)
-                } header: { Text("Bilder") } footer: { Text("Mit Black-Forest-Labs-Schlüssel werden Fotos gesichtstreu bearbeitet (FLUX Kontext).") }
+                    SecureField(settings.runwayKey.isEmpty ? "Runway-Schlüssel (optional)" : "•••••••• (Runway gespeichert)", text: $runwayInput)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    HStack {
+                        Button("Speichern") { settings.runwayKey = runwayInput; runwayInput = "" }.disabled(runwayInput.isEmpty)
+                        Spacer()
+                        if !settings.runwayKey.isEmpty { Button("Entfernen", role: .destructive) { settings.runwayKey = "" } }
+                    }
+                    Link("Runway-Schlüssel holen (dev.runwayml.com)", destination: URL(string: "https://dev.runwayml.com")!).font(.callout)
+                } header: { Text("Bilder") } footer: { Text("Mit Black-Forest-Labs-Schlüssel werden Fotos gesichtstreu bearbeitet (FLUX Kontext). Mit Runway-Schlüssel lassen sich Fotos im Werbevideo zu KI-Videoclips animieren (Gen-4 Turbo, ca. 0,25 $ pro 5 s über dein Runway-Guthaben; das Foto geht dafür an Runway, USA).") }
                 .listRowBackground(Theme.card)
 
                 if Beta.isBeta {

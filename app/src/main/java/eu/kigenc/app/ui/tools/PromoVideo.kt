@@ -77,6 +77,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -105,6 +106,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -141,6 +143,9 @@ data class PromoScene(
 
 /** Inhalt einer hinzugefügten Datei – nur als Information für die KI-Werbetexte. */
 data class PromoDoc(val name: String, val text: String?, val images: List<String>)
+
+/** Standard-Bewegung für Runway, wenn keine eigene Beschreibung angegeben ist. */
+const val RUNWAY_DEFAULT_MOTION = "Smooth cinematic camera push-in, subtle natural motion, professional commercial look"
 
 /** Farben der Abschluss-Karte (oben, unten). */
 val PROMO_COLORS: List<Triple<String, Int, Int>> = listOf(
@@ -729,6 +734,53 @@ class PromoVideoViewModel(app: KiApp) : AiToolViewModel(app) {
     val writing = MutableStateFlow(false)
     val progress = MutableStateFlow<Float?>(null)
     val result = MutableStateFlow<File?>(null)
+    /** Szenen, die gerade von Runway animiert werden: Szenen-ID → Status. */
+    val animating = MutableStateFlow<Map<String, String>>(emptyMap())
+
+    /**
+     * Foto-Szene mit Runway (Gen-4 Turbo) zu einem KI-Videoclip animieren; der Clip ersetzt das Foto
+     * (Einblendung bleibt). Braucht einen Runway-Schlüssel unter Optionen → Bildgenerator.
+     */
+    fun animateScene(id: String, motion: String, seconds: Int) {
+        val scene = scenes.value.firstOrNull { it.id == id && it.kind == PromoSceneKind.PHOTO } ?: return
+        if (id in animating.value) return
+        viewModelScope.launch {
+            val key = app.settings.current().runwayKey
+            if (key.isBlank()) {
+                message.value = "Bitte zuerst unter Optionen → Bildgenerator deinen Runway-Schlüssel eintragen."
+                return@launch
+            }
+            animating.update { it + (id to "Wird gestartet …") }
+            try {
+                val dataUrl = withContext(Dispatchers.IO) {
+                    PromoRenderer.decodeImage(app, scene.uri, 1280)?.let { b -> ImageUtils.bitmapToDataUrl(b, 1280, 85).also { b.recycle() } }
+                } ?: error("Das Foto konnte nicht gelesen werden.")
+                val f = format.value
+                val file = eu.kigenc.app.ai.RunwayClient.imageToVideo(
+                    key, dataUrl, motion.trim().ifBlank { RUNWAY_DEFAULT_MOTION },
+                    eu.kigenc.app.ai.RunwayClient.ratioFor(f.w, f.h), seconds, File(app.filesDir, "videos"),
+                ) { status -> animating.update { m -> if (id in m) m + (id to status) else m } }
+                val clip = withContext(Dispatchers.IO) { clipScene(Uri.fromFile(file)) }
+                var number = 0
+                scenes.value = scenes.value.mapIndexed { i, sc ->
+                    if (sc.id == id) {
+                        number = i + 1
+                        clip.copy(id = sc.id, caption = sc.caption, label = "Runway-" + clip.label)
+                    } else sc
+                }
+                if (clipSeconds.value < seconds) clipSeconds.value = seconds.toFloat()
+                result.value = null
+                message.value = if (number > 0) "Runway-Clip fertig – er ersetzt das Foto in Szene $number." else "Runway-Clip fertig."
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                message.value = e.report("Runway")
+            } finally {
+                animating.update { it - id }
+            }
+        }
+    }
+
     /** Schonender Modus: kleinere Auflösung, Clips mit weniger Einzelbildern (für ältere/knappe Geräte). */
     val safeMode = MutableStateFlow(false)
 
@@ -1058,6 +1110,14 @@ fun PromoVideoScreen(vm: PromoVideoViewModel, onBack: () -> Unit, modifier: Modi
     val result by vm.result.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val safeMode by vm.safeMode.collectAsStateWithLifecycle()
+    val animating by vm.animating.collectAsStateWithLifecycle()
+    var animateTarget by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    animateTarget?.let { target ->
+        RunwayDialog(
+            onDismiss = { animateTarget = null },
+            onStart = { motion, secs -> vm.animateScene(target, motion, secs); animateTarget = null },
+        )
+    }
 
     // Während des Erstellens Bildschirm anlassen – sonst kann Android die App im Hintergrund beenden.
     val view = androidx.compose.ui.platform.LocalView.current
@@ -1134,6 +1194,8 @@ fun PromoVideoScreen(vm: PromoVideoViewModel, onBack: () -> Unit, modifier: Modi
                     onCaption = { vm.setCaption(scene.id, it) },
                     onMove = { vm.moveScene(index, it) },
                     onRemove = { vm.removeScene(scene.id) },
+                    animating = animating[scene.id],
+                    onAnimate = if (scene.kind == PromoSceneKind.PHOTO) ({ animateTarget = scene.id }) else null,
                 )
             }
 
@@ -1322,6 +1384,7 @@ private fun SecondsSlider(label: String, value: Float, range: ClosedFloatingPoin
 private fun SceneRow(
     index: Int, scene: PromoScene, count: Int, enabled: Boolean,
     onCaption: (String) -> Unit, onMove: (Int) -> Unit, onRemove: () -> Unit,
+    animating: String? = null, onAnimate: (() -> Unit)? = null,
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Row(Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1341,6 +1404,18 @@ private fun SceneRow(
                     textStyle = MaterialTheme.typography.bodyMedium,
                     maxLines = 2, enabled = enabled, modifier = Modifier.fillMaxWidth(),
                 )
+                if (animating != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                        CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.size(6.dp))
+                        Text("Runway: $animating", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                } else if (onAnimate != null) {
+                    androidx.compose.material3.TextButton(onClick = onAnimate, enabled = enabled, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) {
+                        Icon(Icons.Outlined.AutoAwesome, null, Modifier.size(16.dp)); Spacer(Modifier.size(4.dp))
+                        Text("Mit Runway animieren", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
             Column {
                 IconButton(onClick = { onMove(-1) }, enabled = enabled && index > 0, modifier = Modifier.size(36.dp)) {
@@ -1355,4 +1430,43 @@ private fun SceneRow(
             }
         }
     }
+}
+
+/** Runway-Auftrag: Bewegung beschreiben, Länge wählen, Kosten sehen. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RunwayDialog(onDismiss: () -> Unit, onStart: (String, Int) -> Unit) {
+    var motion by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
+    var seconds by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableIntStateOf(5) }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Foto mit Runway animieren") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Runway (Gen-4 Turbo) macht aus dem Foto einen KI-Videoclip, der das Foto im Werbevideo ersetzt. " +
+                        "Dauer meist 1–3 Minuten. Das Foto wird dafür an Runway (USA) übertragen.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                OutlinedTextField(
+                    value = motion, onValueChange = { motion = it.take(400) },
+                    label = { Text("Bewegung (optional, am besten auf Englisch)") },
+                    placeholder = { Text("z. B. slow zoom in, steam rising from the coffee") },
+                    minLines = 2, modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(5, 10).forEach { s ->
+                        FilterChip(selected = seconds == s, onClick = { seconds = s }, label = { Text("$s Sekunden") })
+                    }
+                }
+                val credits = seconds * eu.kigenc.app.ai.RunwayClient.CREDITS_PER_SECOND
+                Text(
+                    "Kosten: $credits Runway-Credits (ca. ${"%.2f".format(credits / 100.0)} \$) von deinem Runway-Guthaben – auch wenn Runway das Bild ablehnt.",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
+        confirmButton = { Button(onClick = { onStart(motion, seconds) }) { Text("Animieren") } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Abbrechen") } },
+    )
 }

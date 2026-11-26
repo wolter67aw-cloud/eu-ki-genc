@@ -55,6 +55,8 @@ final class AppSettings: ObservableObject {
 
     @Published var apiKey: String { didSet { Keychain.set(apiKey.trimmingCharacters(in: .whitespacesAndNewlines), for: "mistral_key") } }
     @Published var bflKey: String { didSet { Keychain.set(bflKey.trimmingCharacters(in: .whitespacesAndNewlines), for: "bfl_key") } }
+    /// Runway-Schlüssel (KI-Videoclips aus Fotos im Werbevideo), leer = keiner.
+    @Published var runwayKey: String { didSet { Keychain.set(runwayKey.trimmingCharacters(in: .whitespacesAndNewlines), for: "runway_key") } }
     @Published var chatModel: String { didSet { d.set(chatModel, forKey: "chat_model") } }
     @Published var codeModel: String { didSet { d.set(codeModel, forKey: "code_model") } }
     @Published var autoSpeak: Bool { didSet { d.set(autoSpeak, forKey: "auto_speak") } }
@@ -98,6 +100,7 @@ final class AppSettings: ObservableObject {
     private init() {
         apiKey = Keychain.get("mistral_key")
         bflKey = Keychain.get("bfl_key")
+        runwayKey = Keychain.get("runway_key")
         chatModel = d.string(forKey: "chat_model") ?? "mistral-small-latest"
         codeModel = d.string(forKey: "code_model") ?? "codestral-latest"
         autoSpeak = d.bool(forKey: "auto_speak")

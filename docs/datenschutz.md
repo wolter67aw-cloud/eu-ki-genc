@@ -24,10 +24,11 @@ Daten verlassen das Gerät nur, wenn du eine Funktion aktiv nutzt:
 | **Mistral AI** (Paris, Frankreich; Server in der EU) | Chat, Texte, Code, Bild- und Videoanalyse, Transkription, Recherche, Bildgenerierung | deine Eingaben, angehängte Fotos/Video-Standbilder/Dateien, Audioaufnahmen |
 | **Pollinations.ai** (nur wenn als Bildgenerator gewählt oder im Modus „Automatisch“ als Ausweich) | Bildgenerierung | nur der Bildtext (Prompt), keine Fotos |
 | **Black Forest Labs** (Freiburg, Deutschland; nur mit eigenem Schlüssel) | Bildgenerierung und gesichtstreue Fotobearbeitung | Bildtext und ggf. das zu bearbeitende Foto |
+| **Runway AI, Inc.** (New York, USA; nur mit eigenem Schlüssel und nur, wenn du im Werbevideo „Mit Runway animieren“ tippst) | Kurze KI-Videoclips aus einem Foto | das gewählte Foto und die optionale Bewegungsbeschreibung |
 | **Deezer** (Paris, Frankreich; nur wenn „Musik beim Start“ eingeschaltet ist oder du „Jetzt anhören“ tippst) | Aktuelle Charts und 30-Sekunden-Hörprobe | keine Inhalte von dir – nur der übliche Abruf (IP-Adresse, gewähltes Genre) |
 | **GitHub** (Microsoft) – nur in der GitHub-Version | Prüfung und Download von App-Updates | technische Verbindungsdaten (IP-Adresse) |
 
-Für die Nutzung von Mistral und Black Forest Labs verwendest du **deinen eigenen API-Schlüssel**; es gelten
+Für die Nutzung von Mistral, Black Forest Labs und Runway verwendest du **deinen eigenen API-Schlüssel**; es gelten
 zusätzlich die Datenschutzbestimmungen dieser Anbieter. Hinweis: Im kostenlosen Tarif von Mistral können
 Anfragen zum Training der Modelle verwendet werden.
 
@@ -66,7 +67,7 @@ Grund, optionale Details und – nur wenn du zustimmst – ein Ausschnitt des In
 Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit
 und Widerspruch sowie das Recht auf Beschwerde bei einer Datenschutz-Aufsichtsbehörde. Da der Anbieter selbst
 keine personenbezogenen Daten von dir speichert, wende dich für Daten bei Mistral AI, Pollinations,
-Black Forest Labs oder Deezer bitte direkt an diese Anbieter.
+Black Forest Labs, Runway oder Deezer bitte direkt an diese Anbieter.
 
 ## 8. Kinder
 

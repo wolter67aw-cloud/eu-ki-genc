@@ -95,7 +95,7 @@ struct ConsentView: View {
                 Text("Datenschutz-Hinweis").font(.title.bold())
                     .frame(maxWidth: .infinity)
                     .accessibilityAddTraits(.isHeader)
-                Text("KI-GenC arbeitet mit künstlicher Intelligenz externer Anbieter. Wenn du eine KI-Funktion nutzt, werden deine Eingaben – Texte, angehängte Fotos, Videos, Dateien und Sprachaufnahmen – an Mistral AI (Paris, Rechenzentren in der EU) gesendet und dort verarbeitet. Für Bilder kann je nach Einstellung Pollinations.ai oder Black Forest Labs genutzt werden. Im kostenlosen Mistral-Tarif können Anfragen zum Training der KI-Modelle verwendet werden.")
+                Text("KI-GenC arbeitet mit künstlicher Intelligenz externer Anbieter. Wenn du eine KI-Funktion nutzt, werden deine Eingaben – Texte, angehängte Fotos, Videos, Dateien und Sprachaufnahmen – an Mistral AI (Paris, Rechenzentren in der EU) gesendet und dort verarbeitet. Für Bilder kann je nach Einstellung Pollinations.ai oder Black Forest Labs genutzt werden, für KI-Videoclips im Werbevideo Runway (USA, nur mit eigenem Schlüssel). Im kostenlosen Mistral-Tarif können Anfragen zum Training der KI-Modelle verwendet werden.")
                 Text("Unterhaltungen, Bilder und Einstellungen bleiben auf deinem Gerät. Es gibt keine Werbung und kein Tracking.")
                 Text("Bitte gib keine sensiblen Daten wie Passwörter oder Gesundheitsdaten ein. Deine Zustimmung kannst du jederzeit unter Optionen widerrufen.")
                     .foregroundStyle(Theme.secondaryText)

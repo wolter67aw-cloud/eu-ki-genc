@@ -49,6 +49,8 @@ data class AppSettings(
     val answerStyle: String = "normal",
     /** Schriftgröße in der App (Stufe 0–3, siehe ui/theme/Theme.kt → TEXT_SIZES), zusätzlich zur Geräteeinstellung. */
     val textSize: Int = 0,
+    /** Runway-Schlüssel (KI-Videoclips aus Fotos im Werbevideo), leer = keiner. */
+    val runwayKey: String = "",
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
     /** true, wenn der gemeinsame Schlüssel der Testversion genutzt wird. */
@@ -91,6 +93,7 @@ class SettingsRepository(private val context: Context) {
         val MEMORY_AUTO = booleanPreferencesKey("memory_auto")
         val ANSWER_STYLE = stringPreferencesKey("answer_style")
         val TEXT_SIZE = intPreferencesKey("text_size")
+        val RUNWAY_KEY = stringPreferencesKey("runway_key_enc")
     }
 
     val settings: Flow<AppSettings> = combine(
@@ -119,6 +122,7 @@ class SettingsRepository(private val context: Context) {
             memoryAuto = p[Keys.MEMORY_AUTO] ?: true,
             answerStyle = p[Keys.ANSWER_STYLE] ?: "normal",
             textSize = p[Keys.TEXT_SIZE] ?: 0,
+            runwayKey = p[Keys.RUNWAY_KEY]?.let { Crypto.decrypt(it) }.orEmpty(),
         )
     }.flowOn(Dispatchers.IO)
 
@@ -155,6 +159,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBflKey(key: String) = context.dataStore.edit {
         val t = key.trim()
         if (t.isEmpty()) it.remove(Keys.BFL_KEY) else it.set(Keys.BFL_KEY, Crypto.encrypt(t))
+    }
+
+    suspend fun setRunwayKey(key: String) = context.dataStore.edit {
+        val t = key.trim()
+        if (t.isEmpty()) it.remove(Keys.RUNWAY_KEY) else it.set(Keys.RUNWAY_KEY, Crypto.encrypt(t))
     }
 
     suspend fun setCachedModels(models: List<String>) =
