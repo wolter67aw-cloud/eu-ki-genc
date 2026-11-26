@@ -1,0 +1,70 @@
+name: Google Play hochladen
+
+# Lädt nach jedem erfolgreichen Release auf main die Play-Store-Version (AAB) in den Google-Play-Track
+# (Standard: geschlossener Test „alpha“; änderbar über die Repository-Variable PLAY_TRACK).
+# Ohne das Secret PLAY_SERVICE_ACCOUNT_JSON wird nichts hochgeladen (Hinweis im Lauf).
+on:
+  workflow_run:
+    workflows: ["Build & Release"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release-Tag (z. B. v1.0.126) – leer = neuestes Release"
+        required: false
+        default: ""
+      track:
+        description: "Track"
+        type: choice
+        options: [alpha, internal, beta, production]
+        default: alpha
+
+permissions:
+  contents: read
+
+concurrency:
+  group: play-upload
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Code auschecken
+        uses: actions/checkout@v7
+
+      - name: Zugang prüfen
+        id: check
+        env:
+          SA: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$SA" ]; then
+            echo "::notice::Secret PLAY_SERVICE_ACCOUNT_JSON fehlt – Upload zu Google Play übersprungen."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: AAB und Neuerungen holen
+        if: steps.check.outputs.skip != 'true'
+        id: rel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_INPUT: ${{ github.event.inputs.tag }}
+        run: |
+          TAG="$TAG_INPUT"
+          if [ -z "$TAG" ]; then TAG=$(gh api "repos/${{ github.repository }}/releases/latest" -q .tag_name); fi
+          echo "Release: $TAG"
+          gh release download "$TAG" -R "${{ github.repository }}" -p KI-GenC-PlayStore.aab --clobber
+          gh api "repos/${{ github.repository }}/releases/tags/$TAG" -q .body > notes.md
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Zu Google Play hochladen
+        if: steps.check.outputs.skip != 'true'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ github.event.inputs.track || vars.PLAY_TRACK || 'alpha' }}
+        run: |
+          pip install --quiet google-auth requests
+          python3 scripts/play_upload.py --aab KI-GenC-PlayStore.aab --track "$TRACK" --notes notes.md
